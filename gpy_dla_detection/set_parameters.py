@@ -137,3 +137,9 @@ class Parameters:
             - 1
             + self.min_z_cut,
         )
+
+    def __repr__(self):
+        """
+        print out the default pipeline parameters
+        """
+        return str(self.__dict__)
