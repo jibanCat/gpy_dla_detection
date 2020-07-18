@@ -28,7 +28,7 @@ class PriorCatalog:
     :param param: default parameters set in the set_parameters.
     :param catalog_name: the catalog.mat built by Roman's build_catalog.m (this basically is
         used to find zQSOs, could be replaced by other files in the future if we want to
-        completely depcreate the MATLAB codes)
+        completely deprecate the MATLAB codes)
     :param los_catalog: the line-of-sight searched by this catalog.
     :param dla_catalog: the (thingIDs, zDLAs, logNHIs) searched by the catalog.
     :param prior_ind: the string to indicate the prior ind to be selected, this is meant
