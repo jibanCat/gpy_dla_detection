@@ -148,6 +148,28 @@ class NullGP:
         if build_model:
             self.get_interp(self.x, self.y, self.this_wavelengths, self.z_qso)
 
+        # ensure enough pixels are on either side for convolving with
+        # instrument profile
+        self.padded_wavelengths = np.concatenate(
+            [
+                np.logspace(
+                    np.log10(self.unmasked_wavelengths.min())
+                    - self.params.width * self.params.pixel_spacing,
+                    np.log10(self.unmasked_wavelengths.min())
+                    - self.params.pixel_spacing,
+                    self.params.width,
+                ),
+                self.unmasked_wavelengths,
+                np.logspace(
+                    np.log10(self.unmasked_wavelengths.max())
+                    + self.params.pixel_spacing,
+                    np.log10(np.max(self.unmasked_wavelengths))
+                    + self.params.width * self.params.pixel_spacing,
+                    self.params.width,
+                ),
+            ]
+        )
+
     def get_interp(
         self, x: np.ndarray, y: np.ndarray, wavelengths: np.ndarray, z_qso: float
     ) -> None:
