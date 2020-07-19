@@ -95,6 +95,7 @@ class Parameters:
         self.width = width
         self.pixel_spacing = pixel_spacing
 
+        self.num_lines = num_lines
         self.max_z_cut = self.kms_to_z(max_z_cut)
         self.min_z_cut = self.kms_to_z(min_z_cut)
 
