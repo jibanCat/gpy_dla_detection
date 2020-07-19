@@ -251,10 +251,14 @@ def Voigt(x: np.ndarray, sigma: float, gamma: float) -> np.ndarray:
 
 
 def voigt_absorption(
-    wavelengths: np.ndarray, nhi: float, z_dla: float, num_lines: int = 3, boardening: bool = True
+    wavelengths: np.ndarray,
+    nhi: float,
+    z_dla: float,
+    num_lines: int = 3,
+    boardening: bool = True,
 ) -> np.ndarray:
     """
-    Voigt line profile for absorptions (not yes consider instrumental boardening)
+    Voigt line profile for absorptions
 
     Parameters:
     ----
@@ -288,10 +292,10 @@ def voigt_absorption(
 
     # initialize a profile
     # absorption profile : dimensionless
-    profile = np.zeros((num_points  - 2 * width))
+    profile = np.zeros((num_points - 2 * width))
 
     # raw_profile before convolve with the instrumental profile
-    raw_profile = np.empty((num_points, ))
+    raw_profile = np.empty((num_points,))
 
     # build the multipliers for the relative velocity
     multipliers = c / (transition_wavelengths[:num_lines] * (1 + z_dla)) / 1e8
@@ -314,7 +318,7 @@ def voigt_absorption(
         #     for k,j in enumerate(range(i, i + 2 * width + 1)):
         #         profile[i] += raw_profile[j] * instrument_profile[k]
         # return  profile
-        profile[:] = np.convolve(raw_profile, instrument_profile, 'valid')
+        profile[:] = np.convolve(raw_profile, instrument_profile, "valid")
         return profile
 
     return raw_profile
