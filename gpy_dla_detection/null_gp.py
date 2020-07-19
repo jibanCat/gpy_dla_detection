@@ -215,37 +215,37 @@ class NullGP:
 
     @property
     def mean(self):
-        '''
+        """
         mean model not yet interpolated onto data
-        '''
+        """
         return self.mu
-    
+
     @property
     def K(self):
-        '''
+        """
         covariance kernel not yet interpolated onto data
-        '''
+        """
         return np.matmul(self.M, self.M.T)
 
     @property
     def this_mean(self):
-        '''
+        """
         mean model interpolated onto data
-        '''
+        """
         return self.this_mu
-    
+
     @property
     def this_noise(self):
-        '''
+        """
         noise kernel: absorption noise (omega2) + instrumental noise
-        '''
+        """
         return self.this_omega2 + self.v
 
     @property
     def this_K(self):
-        '''
+        """
         covariance kernel: K = M M'
-        '''
+        """
         return np.matmul(self.this_M, self.this_M.T)
 
     @property
@@ -322,7 +322,7 @@ class NullGP:
         return log_p
 
     def log_prior(self, z_qso: float, without_subDLAs: bool = True) -> float:
-        '''
+        """
         get the model prior of null model, this is defined to be:
             P(no DLA | zQSO) = 1 - P(DLA | zQSO) - P(subDLA | zQSO),
         
@@ -340,13 +340,14 @@ class NullGP:
         as defined in the Garnett (2017) code), but remember to substract
         the subDLA prior if you want to take into account subDLA prior as
         in Ho, Bird, Garnett (2020). 
-        '''
+        """
         if not without_subDLAs:
             NotImplementedError
 
         this_num_dlas, this_num_quasars = self.prior.less_ind(z_qso)
 
-        return np.log( 1 - (this_num_dlas / this_num_quasars) )
+        return np.log(1 - (this_num_dlas / this_num_quasars))
+
 
 class NullGPMAT(NullGP):
     """
