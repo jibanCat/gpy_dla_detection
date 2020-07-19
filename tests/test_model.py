@@ -1,12 +1,15 @@
 """
 test_model.py : test the functions related to GP model
 """
+import os
 import numpy as np
+from matplotlib import pyplot as plt
 from scipy.stats import multivariate_normal
 from gpy_dla_detection.effective_optical_depth import effective_optical_depth
 from gpy_dla_detection.set_parameters import Parameters
-from gpy_dla_detection.null_gp import NullGP
-
+from gpy_dla_detection.model_priors import PriorCatalog
+from gpy_dla_detection.null_gp import NullGPMAT, NullGP
+from gpy_dla_detection.read_spec import read_spec, retrieve_raw_spec
 
 def test_effective_optical_depth():
     z_qso = 4
@@ -58,3 +61,68 @@ def test_log_mvnpdf():
 
     log_p = NullGP.log_mvnpdf_low_rank(y, mu, M, np.ones(2) * 2)
     assert np.abs(log_p - np.log(rv.pdf(y))) < 1e-4
+
+def test_log_likelihood_no_dla():
+    # test 1
+    filename = 'spec-5309-55929-0362.fits'
+
+    if not os.path.exists(filename):
+        retrieve_raw_spec(5309, 55929, 362)  # the spectrum at paper
+
+    z_qso = 3.166
+
+    param = Parameters()
+
+    # prepare these files by running the MATLAB scripts until build_catalog.m
+    prior = PriorCatalog(param, 'data/dr12q/processed/catalog.mat', 'data/dla_catalogs/dr9q_concordance/processed/los_catalog', 'data/dla_catalogs/dr9q_concordance/processed/dla_catalog')
+
+    wavelengths, flux, noise_variance, pixel_mask = read_spec(filename)
+    rest_wavelengths = param.emitted_wavelengths(wavelengths, z_qso)
+
+    gp = NullGPMAT(param, prior, 'data/dr12q/processed/learned_qso_model_lyseries_variance_kim_dr9q_minus_concordance.mat')
+
+    gp.set_data(rest_wavelengths, flux, noise_variance, pixel_mask, z_qso, build_model=True)
+
+    log_likelihood_no_dla = gp.log_model_evidence()
+    print("log p(  D  | z_QSO, no DLA ) : {:.5g}".format(log_likelihood_no_dla))
+
+    assert np.abs(log_likelihood_no_dla - (-889.04809017) ) < 1 # there is some numerical difference
+
+    plt.figure(figsize=(16, 5))
+    plt.plot(gp.x, gp.y, label="observed flux")
+    plt.plot(gp.rest_wavelengths, gp.mu, label="null GP")
+    plt.plot(gp.x, gp.this_mu, label="interpolated null GP")
+    plt.xlabel("rest wavelengths")
+    plt.ylabel("normalised flux")
+    plt.legend()
+    plt.savefig("test1.pdf", format="pdf", dpi=300)
+    plt.clf()
+    plt.close()
+
+    # test 2
+    filename = 'spec-3816-55272-0076.fits'
+    z_qso = 3.68457627
+
+    if not os.path.exists(filename):
+        retrieve_raw_spec(3816, 55272, 76)  # the spectrum at paper
+
+    wavelengths, flux, noise_variance, pixel_mask = read_spec(filename)
+    rest_wavelengths = param.emitted_wavelengths(wavelengths, z_qso)
+
+    gp.set_data(rest_wavelengths, flux, noise_variance, pixel_mask, z_qso, build_model=True)
+
+    log_likelihood_no_dla = gp.log_model_evidence()
+    print("log p(  D  | z_QSO, no DLA ) : {:.5g}".format(log_likelihood_no_dla))
+    
+    assert np.abs(log_likelihood_no_dla - (-734.3727266) ) < 1
+
+    plt.figure(figsize=(16, 5))
+    plt.plot(gp.x, gp.y, label="observed flux")
+    plt.plot(gp.rest_wavelengths, gp.mu, label="null GP")
+    plt.plot(gp.x, gp.this_mu, label="interpolated null GP")
+    plt.xlabel("rest wavelengths")
+    plt.ylabel("normalised flux")
+    plt.legend()
+    plt.savefig("test2.pdf", format="pdf", dpi=300)
+    plt.clf()
+    plt.close()
