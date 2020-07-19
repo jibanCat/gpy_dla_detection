@@ -214,6 +214,41 @@ class NullGP:
         self.this_omega2 = this_omega2
 
     @property
+    def mean(self):
+        '''
+        mean model not yet interpolated onto data
+        '''
+        return self.mu
+    
+    @property
+    def K(self):
+        '''
+        covariance kernel not yet interpolated onto data
+        '''
+        return np.matmul(self.M, self.M.T)
+
+    @property
+    def this_mean(self):
+        '''
+        mean model interpolated onto data
+        '''
+        return self.this_mu
+    
+    @property
+    def this_noise(self):
+        '''
+        noise kernel: absorption noise (omega2) + instrumental noise
+        '''
+        return self.this_omega2 + self.v
+
+    @property
+    def this_K(self):
+        '''
+        covariance kernel: K = M M'
+        '''
+        return np.matmul(self.this_M, self.this_M.T)
+
+    @property
     def X(self) -> np.ndarray:
         return self.x
 
