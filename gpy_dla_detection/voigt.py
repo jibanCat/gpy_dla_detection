@@ -251,16 +251,16 @@ def Voigt(x: np.ndarray, sigma: float, gamma: float) -> np.ndarray:
 
 
 def voigt_absorption(
-    wavelengths: np.ndarray, nhi: float, z_dla: float, num_lines: int = 3
+    wavelengths: np.ndarray, nhi: float, z_dla: float, num_lines: int = 3, boardening: bool = True
 ) -> np.ndarray:
     """
     Voigt line profile for absorptions (not yes consider instrumental boardening)
 
     Parameters:
     ----
-    wavelengths (np.ndarray) : observed wavelengths
-    nhi (float) : column density of this absorber
-    z_dla (float) : the redshift of this absorber
+    wavelengths (np.ndarray) : observed wavelengths (Å)
+    nhi (float) : column density of this absorber   (cm⁻²)
+    z_dla (float) : the redshift of this absorber   (dimensionless)
 
     raw_profile =
         exp( nhi * ( - leading_constants[j] * Voigt(velocity, sigma, gammas[j] ) )  ) 
@@ -273,15 +273,25 @@ def voigt_absorption(
     leading_constants[i] =
        M_PI * e * e * oscillator_strengths[i] * transition_wavelengths[i] / (m_e * c)
 
+
+    /* instrumental broadening */
+    for (i = 0; i < num_points; i++)
+        for (j = i, k = 0; j <= i + 2 * width; j++, k++)
+        profile[i] += raw_profile[j] * instrument_profile[k];
+
     Note: 
     ----
     unit conversion from cm to A is 10^-8
     """
+    # number of pixels within the input spectrum
+    num_points = wavelengths.shape[0]
+
     # initialize a profile
-    profile = np.empty((wavelengths.shape[0]))  # - 2 * width))
+    # absorption profile : dimensionless
+    profile = np.zeros((num_points  - 2 * width))
 
     # raw_profile before convolve with the instrumental profile
-    raw_profile = np.copy(profile)
+    raw_profile = np.empty((num_points, ))
 
     # build the multipliers for the relative velocity
     multipliers = c / (transition_wavelengths[:num_lines] * (1 + z_dla)) / 1e8
@@ -295,5 +305,16 @@ def voigt_absorption(
         total[l, :] = -leading_constants[l] * Voigt(velocity, sigma, gammas[l])
 
     raw_profile[:] = np.exp(np.float(nhi) * np.nansum(total, axis=0))
+
+    if boardening:
+        # num_points = len(profile)
+
+        # # instrumental broadening
+        # for i in range(num_points):
+        #     for k,j in enumerate(range(i, i + 2 * width + 1)):
+        #         profile[i] += raw_profile[j] * instrument_profile[k]
+        # return  profile
+        profile[:] = np.convolve(raw_profile, instrument_profile, 'valid')
+        return profile
 
     return raw_profile
