@@ -321,6 +321,32 @@ class NullGP:
 
         return log_p
 
+    def log_prior(self, z_qso: float, without_subDLAs: bool = True) -> float:
+        '''
+        get the model prior of null model, this is defined to be:
+            P(no DLA | zQSO) = 1 - P(DLA | zQSO) - P(subDLA | zQSO),
+        
+        where
+
+            P(DLA | zQSO) = M / N
+        
+        M : number of DLAs below this zQSO
+        N : number of quasars below this zQSO
+
+        without P(subDLA | zQSO),
+            P(DLA | zQSO) = 1 - M / N
+        
+        we return the null model prior without subDLAs prior here (
+        as defined in the Garnett (2017) code), but remember to substract
+        the subDLA prior if you want to take into account subDLA prior as
+        in Ho, Bird, Garnett (2020). 
+        '''
+        if not without_subDLAs:
+            NotImplementedError
+
+        this_num_dlas, this_num_quasars = self.prior.less_ind(z_qso)
+
+        return np.log( 1 - (this_num_dlas / this_num_quasars) )
 
 class NullGPMAT(NullGP):
     """
