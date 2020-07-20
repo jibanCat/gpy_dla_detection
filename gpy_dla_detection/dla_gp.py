@@ -175,7 +175,7 @@ class DLAGP(NullGP):
             log_likelihoods_dla[num_dlas] = (
                 max_log_likelihood
                 + np.log(np.nanmean(sample_probabilities))
-                - np.log(self.params.num_dla_samples) * (num_dlas - 1)
+                - np.log(self.params.num_dla_samples) * num_dlas
             )  # occams razor for more DLA parameters
 
             # no needs for re-sample the QMC samples for the last run
