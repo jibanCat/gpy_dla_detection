@@ -2,6 +2,7 @@
 test_model.py : test the functions related to GP model
 """
 import os
+import time
 import numpy as np
 from matplotlib import pyplot as plt
 from scipy.stats import multivariate_normal
@@ -167,3 +168,40 @@ def test_dla_model():
     print("log p(  D  | z_QSO, no DLA ) : {:.5g}".format(log_likelihood_no_dla))
 
     assert sample_log_likelihood_dla > log_likelihood_no_dla
+
+def test_dla_model_evidences():
+    # test 1
+    filename = 'spec-5309-55929-0362.fits'
+
+    if not os.path.exists(filename):
+        retrieve_raw_spec(5309, 55929, 362)  # the spectrum at paper
+
+    z_qso = 3.166
+
+    param = Parameters()
+
+    # prepare these files by running the MATLAB scripts until build_catalog.m
+    prior = PriorCatalog(param, 'data/dr12q/processed/catalog.mat', 'data/dla_catalogs/dr9q_concordance/processed/los_catalog', 'data/dla_catalogs/dr9q_concordance/processed/dla_catalog')
+    dla_samples = DLASamplesMAT(param, prior, 'data/dr12q/processed/dla_samples_a03.mat')
+
+    wavelengths, flux, noise_variance, pixel_mask = read_spec(filename)
+    rest_wavelengths = param.emitted_wavelengths(wavelengths, z_qso)
+
+    # DLA GP Model
+    dla_gp = DLAGPMAT(param, prior, dla_samples, 3000., 'data/dr12q/processed/learned_qso_model_lyseries_variance_kim_dr9q_minus_concordance.mat')
+    dla_gp.set_data(rest_wavelengths, flux, noise_variance, pixel_mask, z_qso, build_model=True)
+
+    tic = time.time()
+
+    max_dlas = 4
+    log_likelihoods_dla = dla_gp.log_model_evidences(max_dlas)
+
+    toc = time.time()
+    print("spent {} mins; {} seconds".format((toc - tic) // 60, (toc - tic) % 60))
+
+    for i in range(max_dlas):
+        print("log p(  D  | z_QSO, DLA{} ) : {:.5g}".format(i+1, log_likelihoods_dla[i]))
+
+    # # log likelihood results from the catalog
+    # catalog_log_likelihoods_dla = np.array([-688.91647288, -633.00070813, -634.08569242, -640.77120558])
+    # assert np.all(np.abs( catalog_log_likelihoods_dla - log_likelihoods_dla  ) < 1)
