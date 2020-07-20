@@ -311,16 +311,17 @@ class DLAGP(NullGP):
         """
         this_num_dlas, this_num_quasars = self.prior.less_ind(z_qso)
 
-        log_priors_dla = np.zeros((max_dlas, ))
+        log_priors_dla = np.zeros((max_dlas,))
 
         p_dlas = (this_num_dlas / this_num_quasars) ** np.arange(1, max_dlas + 1)
 
         for i in range(max_dlas):
-            p_dlas[i] = p_dlas[i] - np.sum(p_dlas[(i+1):])
+            p_dlas[i] = p_dlas[i] - np.sum(p_dlas[(i + 1) :])
 
             log_priors_dla[i] = np.log(p_dlas[i])
 
         return log_priors_dla
+
 
 class DLAGPMAT(DLAGP):
     """

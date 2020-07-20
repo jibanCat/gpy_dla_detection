@@ -313,4 +313,4 @@ def test_prior():
 
     catalog_log_priors = np.array([-2.53774598, -4.97413739, -7.40285925, -9.74851888])
 
-    assert np.all( np.abs(log_priors - catalog_log_priors) < 1e-4 )
+    assert np.all(np.abs(log_priors - catalog_log_priors) < 1e-4)
