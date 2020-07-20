@@ -132,11 +132,11 @@ class Parameters:
         """
         determines minimum z_DLA to search
         """
-        return np.max(
+        return np.max([
             np.min(wavelengths) / self.lya_wavelength - 1,
             self.observed_wavelengths(self.lyman_limit, z_qso) / self.lya_wavelength
             - 1
-            + self.min_z_cut,
+            + self.min_z_cut]
         )
 
     def __repr__(self):
