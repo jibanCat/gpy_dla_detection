@@ -14,6 +14,7 @@ from gpy_dla_detection.dla_gp import DLAGPMAT
 from gpy_dla_detection.read_spec import read_spec, retrieve_raw_spec
 from gpy_dla_detection.dla_samples import DLASamplesMAT
 
+
 def test_effective_optical_depth():
     z_qso = 4
     rest_wavelengths = np.linspace(911, 1216, 500)
@@ -65,9 +66,10 @@ def test_log_mvnpdf():
     log_p = NullGP.log_mvnpdf_low_rank(y, mu, M, np.ones(2) * 2)
     assert np.abs(log_p - np.log(rv.pdf(y))) < 1e-4
 
+
 def test_log_likelihood_no_dla():
     # test 1
-    filename = 'spec-5309-55929-0362.fits'
+    filename = "spec-5309-55929-0362.fits"
 
     if not os.path.exists(filename):
         retrieve_raw_spec(5309, 55929, 362)  # the spectrum at paper
@@ -77,19 +79,32 @@ def test_log_likelihood_no_dla():
     param = Parameters()
 
     # prepare these files by running the MATLAB scripts until build_catalog.m
-    prior = PriorCatalog(param, 'data/dr12q/processed/catalog.mat', 'data/dla_catalogs/dr9q_concordance/processed/los_catalog', 'data/dla_catalogs/dr9q_concordance/processed/dla_catalog')
+    prior = PriorCatalog(
+        param,
+        "data/dr12q/processed/catalog.mat",
+        "data/dla_catalogs/dr9q_concordance/processed/los_catalog",
+        "data/dla_catalogs/dr9q_concordance/processed/dla_catalog",
+    )
 
     wavelengths, flux, noise_variance, pixel_mask = read_spec(filename)
     rest_wavelengths = param.emitted_wavelengths(wavelengths, z_qso)
 
-    gp = NullGPMAT(param, prior, 'data/dr12q/processed/learned_qso_model_lyseries_variance_kim_dr9q_minus_concordance.mat')
+    gp = NullGPMAT(
+        param,
+        prior,
+        "data/dr12q/processed/learned_qso_model_lyseries_variance_kim_dr9q_minus_concordance.mat",
+    )
 
-    gp.set_data(rest_wavelengths, flux, noise_variance, pixel_mask, z_qso, build_model=True)
+    gp.set_data(
+        rest_wavelengths, flux, noise_variance, pixel_mask, z_qso, build_model=True
+    )
 
     log_likelihood_no_dla = gp.log_model_evidence()
     print("log p(  D  | z_QSO, no DLA ) : {:.5g}".format(log_likelihood_no_dla))
 
-    assert np.abs(log_likelihood_no_dla - (-889.04809017) ) < 1 # there is some numerical difference
+    assert (
+        np.abs(log_likelihood_no_dla - (-889.04809017)) < 1
+    )  # there is some numerical difference
 
     plt.figure(figsize=(16, 5))
     plt.plot(gp.x, gp.y, label="observed flux")
@@ -103,7 +118,7 @@ def test_log_likelihood_no_dla():
     plt.close()
 
     # test 2
-    filename = 'spec-3816-55272-0076.fits'
+    filename = "spec-3816-55272-0076.fits"
     z_qso = 3.68457627
 
     if not os.path.exists(filename):
@@ -112,12 +127,14 @@ def test_log_likelihood_no_dla():
     wavelengths, flux, noise_variance, pixel_mask = read_spec(filename)
     rest_wavelengths = param.emitted_wavelengths(wavelengths, z_qso)
 
-    gp.set_data(rest_wavelengths, flux, noise_variance, pixel_mask, z_qso, build_model=True)
+    gp.set_data(
+        rest_wavelengths, flux, noise_variance, pixel_mask, z_qso, build_model=True
+    )
 
     log_likelihood_no_dla = gp.log_model_evidence()
     print("log p(  D  | z_QSO, no DLA ) : {:.5g}".format(log_likelihood_no_dla))
-    
-    assert np.abs(log_likelihood_no_dla - (-734.3727266) ) < 1
+
+    assert np.abs(log_likelihood_no_dla - (-734.3727266)) < 1
 
     plt.figure(figsize=(16, 5))
     plt.plot(gp.x, gp.y, label="observed flux")
@@ -133,7 +150,7 @@ def test_log_likelihood_no_dla():
 
 def test_dla_model():
     # test 1
-    filename = 'spec-5309-55929-0362.fits'
+    filename = "spec-5309-55929-0362.fits"
 
     if not os.path.exists(filename):
         retrieve_raw_spec(5309, 55929, 362)  # the spectrum at paper
@@ -143,35 +160,59 @@ def test_dla_model():
     param = Parameters()
 
     # prepare these files by running the MATLAB scripts until build_catalog.m
-    prior = PriorCatalog(param, 'data/dr12q/processed/catalog.mat', 'data/dla_catalogs/dr9q_concordance/processed/los_catalog', 'data/dla_catalogs/dr9q_concordance/processed/dla_catalog')
-    dla_samples = DLASamplesMAT(param, prior, 'data/dr12q/processed/dla_samples_a03.mat')
+    prior = PriorCatalog(
+        param,
+        "data/dr12q/processed/catalog.mat",
+        "data/dla_catalogs/dr9q_concordance/processed/los_catalog",
+        "data/dla_catalogs/dr9q_concordance/processed/dla_catalog",
+    )
+    dla_samples = DLASamplesMAT(
+        param, prior, "data/dr12q/processed/dla_samples_a03.mat"
+    )
 
     wavelengths, flux, noise_variance, pixel_mask = read_spec(filename)
     rest_wavelengths = param.emitted_wavelengths(wavelengths, z_qso)
 
     # DLA GP Model
-    dla_gp = DLAGPMAT(param, prior, dla_samples, 3000., 'data/dr12q/processed/learned_qso_model_lyseries_variance_kim_dr9q_minus_concordance.mat')
-    dla_gp.set_data(rest_wavelengths, flux, noise_variance, pixel_mask, z_qso, build_model=True)
+    dla_gp = DLAGPMAT(
+        param,
+        prior,
+        dla_samples,
+        3000.0,
+        "data/dr12q/processed/learned_qso_model_lyseries_variance_kim_dr9q_minus_concordance.mat",
+    )
+    dla_gp.set_data(
+        rest_wavelengths, flux, noise_variance, pixel_mask, z_qso, build_model=True
+    )
 
     # These are the MAPs from the paper
     z_dlas = np.array([2.52182382, 3.03175723])
-    nhis = 10**np.array([20.63417494, 22.28420156])
+    nhis = 10 ** np.array([20.63417494, 22.28420156])
 
     sample_log_likelihood_dla = dla_gp.sample_log_likelihood_k_dlas(z_dlas, nhis)
-    print("log p(  D  | z_QSO, zdlas, nhis ) : {:.5g}".format(sample_log_likelihood_dla))
+    print(
+        "log p(  D  | z_QSO, zdlas, nhis ) : {:.5g}".format(sample_log_likelihood_dla)
+    )
 
     # Build a Null model
-    gp = NullGPMAT(param, prior, 'data/dr12q/processed/learned_qso_model_lyseries_variance_kim_dr9q_minus_concordance.mat')
-    gp.set_data(rest_wavelengths, flux, noise_variance, pixel_mask, z_qso, build_model=True)
+    gp = NullGPMAT(
+        param,
+        prior,
+        "data/dr12q/processed/learned_qso_model_lyseries_variance_kim_dr9q_minus_concordance.mat",
+    )
+    gp.set_data(
+        rest_wavelengths, flux, noise_variance, pixel_mask, z_qso, build_model=True
+    )
 
     log_likelihood_no_dla = gp.log_model_evidence()
     print("log p(  D  | z_QSO, no DLA ) : {:.5g}".format(log_likelihood_no_dla))
 
     assert sample_log_likelihood_dla > log_likelihood_no_dla
 
+
 def test_dla_model_evidences():
     # test 1
-    filename = 'spec-5309-55929-0362.fits'
+    filename = "spec-5309-55929-0362.fits"
 
     if not os.path.exists(filename):
         retrieve_raw_spec(5309, 55929, 362)  # the spectrum at paper
@@ -181,15 +222,30 @@ def test_dla_model_evidences():
     param = Parameters()
 
     # prepare these files by running the MATLAB scripts until build_catalog.m
-    prior = PriorCatalog(param, 'data/dr12q/processed/catalog.mat', 'data/dla_catalogs/dr9q_concordance/processed/los_catalog', 'data/dla_catalogs/dr9q_concordance/processed/dla_catalog')
-    dla_samples = DLASamplesMAT(param, prior, 'data/dr12q/processed/dla_samples_a03.mat')
+    prior = PriorCatalog(
+        param,
+        "data/dr12q/processed/catalog.mat",
+        "data/dla_catalogs/dr9q_concordance/processed/los_catalog",
+        "data/dla_catalogs/dr9q_concordance/processed/dla_catalog",
+    )
+    dla_samples = DLASamplesMAT(
+        param, prior, "data/dr12q/processed/dla_samples_a03.mat"
+    )
 
     wavelengths, flux, noise_variance, pixel_mask = read_spec(filename)
     rest_wavelengths = param.emitted_wavelengths(wavelengths, z_qso)
 
     # DLA GP Model
-    dla_gp = DLAGPMAT(param, prior, dla_samples, 3000., 'data/dr12q/processed/learned_qso_model_lyseries_variance_kim_dr9q_minus_concordance.mat')
-    dla_gp.set_data(rest_wavelengths, flux, noise_variance, pixel_mask, z_qso, build_model=True)
+    dla_gp = DLAGPMAT(
+        param,
+        prior,
+        dla_samples,
+        3000.0,
+        "data/dr12q/processed/learned_qso_model_lyseries_variance_kim_dr9q_minus_concordance.mat",
+    )
+    dla_gp.set_data(
+        rest_wavelengths, flux, noise_variance, pixel_mask, z_qso, build_model=True
+    )
 
     tic = time.time()
 
@@ -201,11 +257,60 @@ def test_dla_model_evidences():
     print("spent {} mins; {} seconds".format((toc - tic) // 60, (toc - tic) % 60))
 
     # log likelihood results from the catalog
-    catalog_log_likelihoods_dla = np.array([-688.91647288, -633.00070813, -634.08569242, -640.77120558])
+    catalog_log_likelihoods_dla = np.array(
+        [-688.91647288, -633.00070813, -634.08569242, -640.77120558]
+    )
 
     for i in range(max_dlas):
-        print("log p(  D  | z_QSO, DLA{} ) : {:.5g}; MATLAB value: {:.5g}".format(
-            i+1, log_likelihoods_dla[i], catalog_log_likelihoods_dla[i]))
+        print(
+            "log p(  D  | z_QSO, DLA{} ) : {:.5g}; MATLAB value: {:.5g}".format(
+                i + 1, log_likelihoods_dla[i], catalog_log_likelihoods_dla[i]
+            )
+        )
 
     # the accuracy down to 2.5 in log scale, this needs to be investigated.
-    assert np.all(np.abs( catalog_log_likelihoods_dla - log_likelihoods_dla  ) < 2.5)
+    assert np.all(np.abs(catalog_log_likelihoods_dla - log_likelihoods_dla) < 2.5)
+
+
+def test_prior():
+    # test 1
+    filename = "spec-5309-55929-0362.fits"
+
+    if not os.path.exists(filename):
+        retrieve_raw_spec(5309, 55929, 362)  # the spectrum at paper
+
+    z_qso = 3.166
+
+    param = Parameters()
+
+    # prepare these files by running the MATLAB scripts until build_catalog.m
+    prior = PriorCatalog(
+        param,
+        "data/dr12q/processed/catalog.mat",
+        "data/dla_catalogs/dr9q_concordance/processed/los_catalog",
+        "data/dla_catalogs/dr9q_concordance/processed/dla_catalog",
+    )
+    dla_samples = DLASamplesMAT(
+        param, prior, "data/dr12q/processed/dla_samples_a03.mat"
+    )
+
+    wavelengths, flux, noise_variance, pixel_mask = read_spec(filename)
+    rest_wavelengths = param.emitted_wavelengths(wavelengths, z_qso)
+
+    # DLA GP Model
+    dla_gp = DLAGPMAT(
+        param,
+        prior,
+        dla_samples,
+        3000.0,
+        "data/dr12q/processed/learned_qso_model_lyseries_variance_kim_dr9q_minus_concordance.mat",
+    )
+    dla_gp.set_data(
+        rest_wavelengths, flux, noise_variance, pixel_mask, z_qso, build_model=True
+    )
+
+    log_priors = dla_gp.log_priors(z_qso, max_dlas=4)
+
+    catalog_log_priors = np.array([-2.53774598, -4.97413739, -7.40285925, -9.74851888])
+
+    assert np.all( np.abs(log_priors - catalog_log_priors) < 1e-4 )

@@ -206,6 +206,10 @@ class DLAGP(NullGP):
                 p=W / W.sum(),
             )
 
+        # store sample likelihoods for MAP value calculation
+        # this could cause troubles for parallelization in the future
+        self.sample_log_likelihoods = sample_log_likelihoods
+
         return log_likelihoods_dla
 
     def sample_log_likelihood_k_dlas(
@@ -286,6 +290,37 @@ class DLAGP(NullGP):
 
         return dla_mu, dla_M, dla_omega2
 
+    def log_priors(self, z_qso: float, max_dlas: int) -> float:
+        """
+        get the model prior of null model, this is defined to be:
+            P(k DLA | zQSO) = P(at least k DLAs | zQSO) - P(at least (k + 1) DLAs | zQSO),
+        
+        where
+
+            P(at least 1 DLA | zQSO) = M / N
+        
+        M : number of DLAs below this zQSO
+        N : number of quasars below this zQSO
+
+        and
+
+            P(at least k DLA | zQSO) = (M / N)^k
+        
+        Note: I did not overwrite the NullGP log prior, name of this method is log_prior's'
+        for multi-DLAs
+        """
+        this_num_dlas, this_num_quasars = self.prior.less_ind(z_qso)
+
+        log_priors_dla = np.zeros((max_dlas, ))
+
+        p_dlas = (this_num_dlas / this_num_quasars) ** np.arange(1, max_dlas + 1)
+
+        for i in range(max_dlas):
+            p_dlas[i] = p_dlas[i] - np.sum(p_dlas[(i+1):])
+
+            log_priors_dla[i] = np.log(p_dlas[i])
+
+        return log_priors_dla
 
 class DLAGPMAT(DLAGP):
     """
