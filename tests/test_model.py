@@ -210,7 +210,7 @@ def test_dla_model():
     assert sample_log_likelihood_dla > log_likelihood_no_dla
 
 
-def test_dla_model_evidences():
+def test_dla_model_evidences(scipy_lapack: bool = False):
     # test 1
     filename = "spec-5309-55929-0362.fits"
 
@@ -250,7 +250,7 @@ def test_dla_model_evidences():
     tic = time.time()
 
     max_dlas = 4
-    log_likelihoods_dla = dla_gp.log_model_evidences(max_dlas)
+    log_likelihoods_dla = dla_gp.log_model_evidences(max_dlas, scipy_lapack=scipy_lapack)
 
     toc = time.time()
     # very time consuming: ~ 4 mins for a single spectrum without parallelized.

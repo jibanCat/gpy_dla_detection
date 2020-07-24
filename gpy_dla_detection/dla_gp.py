@@ -79,7 +79,7 @@ class DLAGP(NullGP):
 
         self.dla_samples = dla_samples
 
-    def log_model_evidences(self, max_dlas: int) -> np.ndarray:
+    def log_model_evidences(self, max_dlas: int, scipy_lapack: bool = False) -> np.ndarray:
         """
         marginalize out the DLA parameters, {(z_dla_i, logNHI_i)}_{i=1}^k_dlas,
         and return an array of log_model_evidences for 1:k DLA models
@@ -143,7 +143,7 @@ class DLAGP(NullGP):
 
                 # store the sample log likelihoods conditioned on k-DLAs
                 sample_log_likelihoods[i, num_dlas] = self.sample_log_likelihood_k_dlas(
-                    z_dlas, nhis
+                    z_dlas, nhis, scipy_lapack=scipy_lapack
                 ) - np.log(
                     self.params.num_dla_samples
                 )  # additional occams razor
@@ -215,7 +215,8 @@ class DLAGP(NullGP):
 
     @profile
     def sample_log_likelihood_k_dlas(
-        self, z_dlas: np.ndarray, nhis: np.ndarray
+        self, z_dlas: np.ndarray, nhis: np.ndarray, 
+        scipy_lapack: bool = False
     ) -> float:
         """
         Compute the log likelihood of k DLAs within a quasar spectrum:
@@ -229,7 +230,7 @@ class DLAGP(NullGP):
         dla_mu, dla_M, dla_omega2 = self.this_dla_gp(z_dlas, nhis)
 
         sample_log_likelihood = self.log_mvnpdf_low_rank(
-            self.y, dla_mu, dla_M, dla_omega2 + self.v
+            self.y, dla_mu, dla_M, dla_omega2 + self.v, scipy_lapack
         )
 
         return sample_log_likelihood
