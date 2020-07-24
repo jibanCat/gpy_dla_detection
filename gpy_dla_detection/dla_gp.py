@@ -15,6 +15,7 @@ from .voigt import voigt_absorption
 # I import this is for the convenient of my autocomplete
 from .dla_samples import DLASamplesMAT
 
+from profilehooks import profile
 
 class DLAGP(NullGP):
     """
@@ -212,6 +213,7 @@ class DLAGP(NullGP):
 
         return log_likelihoods_dla
 
+    @profile
     def sample_log_likelihood_k_dlas(
         self, z_dlas: np.ndarray, nhis: np.ndarray
     ) -> float:

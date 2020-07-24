@@ -10,6 +10,8 @@ from .set_parameters import Parameters
 from .model_priors import PriorCatalog
 from .effective_optical_depth import effective_optical_depth
 
+from scipy.linalg import lapack
+
 
 class NullGP:
     """
@@ -300,7 +302,11 @@ class NullGP:
 
     @staticmethod
     def log_mvnpdf_low_rank(
-        y: np.ndarray, mu: np.ndarray, M: np.ndarray, d: np.ndarray
+        y: np.ndarray,
+        mu: np.ndarray,
+        M: np.ndarray,
+        d: np.ndarray,
+        scipy_lapack: bool = False,
     ) -> float:
         """
         efficiently computes
@@ -332,8 +338,14 @@ class NullGP:
         # numpy cholesky returns lower triangle, different than MATLAB's upper triangle
         L = np.linalg.cholesky(B)
         # C = B^-1 M' D^-1
-        tmp = scipy.linalg.solve_triangular(L, D_inv_M.T, lower=True)  # (k, n_points)
-        C = scipy.linalg.solve_triangular(L.T, tmp, lower=False)  # (k, n_points)
+        if scipy_lapack:
+            tmp = np.matmul(lapack.dtrtri(np.asfortranarray(L), lower=1)[0], D_inv_M.T)
+            C = np.matmul(lapack.dtrtri(np.asfortranarray(L.T), lower=0)[0], tmp)
+        else:
+            tmp = scipy.linalg.solve_triangular(
+                L, D_inv_M.T, lower=True
+            )  # (k, n_points)
+            C = scipy.linalg.solve_triangular(L.T, tmp, lower=False)  # (k, n_points)
 
         K_inv_y = D_inv_y - np.matmul(D_inv_M, np.matmul(C, y))  # (n_points, 1)
 
