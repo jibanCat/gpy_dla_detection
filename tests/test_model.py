@@ -314,3 +314,47 @@ def test_prior():
     catalog_log_priors = np.array([-2.53774598, -4.97413739, -7.40285925, -9.74851888])
 
     assert np.all(np.abs(log_priors - catalog_log_priors) < 1e-4)
+
+
+def prepare_dla_model(
+    plate: int = 5309, mjd: int = 55929, fiber_id: int = 362
+) -> DLAGPMAT:
+    """
+    Return a DLAGP instance from an input SDSS DR12 spectrum.
+    """
+    filename = "spec-{}-{}-{}.fits".format(plate, mjd, str(fiber_id).zfill(4))
+
+    if not os.path.exists(filename):
+        retrieve_raw_spec(plate, mjd, fiber_id)  # the spectrum at paper
+
+    z_qso = 3.166
+
+    param = Parameters()
+
+    # prepare these files by running the MATLAB scripts until build_catalog.m
+    prior = PriorCatalog(
+        param,
+        "data/dr12q/processed/catalog.mat",
+        "data/dla_catalogs/dr9q_concordance/processed/los_catalog",
+        "data/dla_catalogs/dr9q_concordance/processed/dla_catalog",
+    )
+    dla_samples = DLASamplesMAT(
+        param, prior, "data/dr12q/processed/dla_samples_a03.mat"
+    )
+
+    wavelengths, flux, noise_variance, pixel_mask = read_spec(filename)
+    rest_wavelengths = param.emitted_wavelengths(wavelengths, z_qso)
+
+    # DLA GP Model
+    dla_gp = DLAGPMAT(
+        param,
+        prior,
+        dla_samples,
+        3000.0,
+        "data/dr12q/processed/learned_qso_model_lyseries_variance_kim_dr9q_minus_concordance.mat",
+    )
+    dla_gp.set_data(
+        rest_wavelengths, flux, noise_variance, pixel_mask, z_qso, build_model=True
+    )
+
+    return dla_gp
