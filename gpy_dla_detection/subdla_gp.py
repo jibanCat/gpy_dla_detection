@@ -114,7 +114,7 @@ class SubDLAGP(NullGP):
         sample_log_likelihoods[:] = np.nan
 
         # prepare z_dla samples
-        sample_z_dlas = self.dla_samples.sample_z_dlas(
+        sample_z_dlas = self.dla_samples.sample_z_lls(
             self.this_wavelengths, self.z_qso
         )
 
