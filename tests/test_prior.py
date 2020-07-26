@@ -72,8 +72,9 @@ def test_subdla_and_null_model_priors():
 
     # the prior values in the Ho-Bird-Garnett catalog
     catalog_log_priors = np.array(
-        [[-2.53774598, -4.97413739, -7.40285925, -9.74851888]]
+        [-2.53774598, -4.97413739, -7.40285925, -9.74851888]
     )
+    print(catalog_log_priors, log_priors_4_dla)
     assert np.all(np.abs(log_priors_4_dla - catalog_log_priors) < 1e-4)
 
     # check if the subDLA model priors make sense
@@ -99,3 +100,48 @@ def test_subdla_and_null_model_priors():
     print("log p( no DLA | z_QSO ) : {:.5g}; MATLAB value: {:.5g}".format(
             log_prior_no_dla, catalog_log_prior_no_dla))
     assert np.abs(log_prior_no_dla - catalog_log_prior_no_dla) < 1e-3
+
+    # test 2
+    dla_gp = prepare_dla_model(3816, 55272, 76, z_qso=3.68457627)
+    subdla_gp = prepare_subdla_model(3816, 55272, 76, z_qso=3.68457627)
+
+    # test model priors
+    log_priors_1_dla = dla_gp.log_priors(dla_gp.z_qso, 1)
+    log_priors_2_dla = dla_gp.log_priors(dla_gp.z_qso, 2)
+    log_priors_4_dla = dla_gp.log_priors(dla_gp.z_qso, 4)
+
+    # make sure they sum to the same value, since prior for
+    # at least one DLA should equal to prior for exactly
+    # one DLA + at least two DLAs.
+    assert np.abs(logsumexp(log_priors_1_dla) - logsumexp(log_priors_2_dla)) < 5e-2
+    assert np.abs(logsumexp(log_priors_2_dla) - logsumexp(log_priors_4_dla)) < 5e-2 # TODO: the bug of MATLAB needs to be fix in the future
+
+    # the prior values in the Ho-Bird-Garnett catalog
+    catalog_log_priors = np.array(
+        [-2.40603132, -4.69090863, -6.96539755, -9.14424546]
+    )
+    print(catalog_log_priors, log_priors_4_dla)
+    assert np.all(np.abs(log_priors_4_dla - catalog_log_priors) < 1e-3)
+
+    # check if the subDLA model priors make sense
+    log_priors_1_subdla = subdla_gp.log_priors(subdla_gp.z_qso, 1)[0]
+    assert 0 <= np.exp(log_priors_1_subdla) <= 1
+    assert (
+        np.abs(
+            np.exp(log_priors_1_dla)
+            - subdla_gp.dla_samples._Z_dla
+            / subdla_gp.dla_samples._Z_lls
+            * np.exp(log_priors_1_subdla)
+        )
+        < 1e-2
+    )
+
+    # check if the null model is the same as the catalogue value
+    log_prior_no_dla = np.log(
+        1 - np.exp(log_priors_1_subdla) - np.exp(logsumexp(log_priors_4_dla))
+    )
+    catalog_log_prior_no_dla = -0.17660122
+
+    print("log p( no DLA | z_QSO ) : {:.5g}; MATLAB value: {:.5g}".format(
+            log_prior_no_dla, catalog_log_prior_no_dla))
+    assert np.abs(log_prior_no_dla - catalog_log_prior_no_dla) < 5e-3
