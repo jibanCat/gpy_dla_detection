@@ -15,6 +15,8 @@ from .voigt import voigt_absorption
 # I import this is for the convenient of my autocomplete
 from .dla_samples import DLASamplesMAT
 
+from profilehooks import profile
+
 
 class DLAGP(NullGP):
     """
@@ -212,6 +214,7 @@ class DLAGP(NullGP):
 
         return log_likelihoods_dla
 
+    @profile
     def sample_log_likelihood_k_dlas(
         self, z_dlas: np.ndarray, nhis: np.ndarray
     ) -> float:
@@ -315,10 +318,15 @@ class DLAGP(NullGP):
 
         p_dlas = (this_num_dlas / this_num_quasars) ** np.arange(1, max_dlas + 1)
 
-        for i in range(max_dlas):
-            p_dlas[i] = p_dlas[i] - np.sum(p_dlas[(i + 1) :])
+        p_dlas[:-1] = p_dlas[:-1] - p_dlas[1:]
 
-            log_priors_dla[i] = np.log(p_dlas[i])
+        log_priors_dla = np.log(p_dlas)
+
+        # for i in range(max_dlas - 1):
+        #     # this line is correct while the MATLAB code has a bug.
+        #     p_dlas[i] = p_dlas[i] - p_dlas[i + 1]
+
+        #     log_priors_dla[i] = np.log(p_dlas[i])
 
         return log_priors_dla
 
