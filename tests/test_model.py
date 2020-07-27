@@ -7,13 +7,18 @@ import numpy as np
 from matplotlib import pyplot as plt
 from scipy.stats import multivariate_normal
 from gpy_dla_detection.effective_optical_depth import effective_optical_depth
+
 from gpy_dla_detection.set_parameters import Parameters
 from gpy_dla_detection.model_priors import PriorCatalog
+
 from gpy_dla_detection.null_gp import NullGPMAT, NullGP
 from gpy_dla_detection.dla_gp import DLAGPMAT
-from gpy_dla_detection.read_spec import read_spec, retrieve_raw_spec
-from gpy_dla_detection.dla_samples import DLASamplesMAT
+from gpy_dla_detection.subdla_gp import SubDLAGPMAT
 
+from gpy_dla_detection.read_spec import read_spec, retrieve_raw_spec
+
+from gpy_dla_detection.dla_samples import DLASamplesMAT
+from gpy_dla_detection.subdla_samples import SubDLASamplesMAT
 
 def test_effective_optical_depth():
     z_qso = 4
@@ -317,7 +322,7 @@ def test_prior():
 
 
 def prepare_dla_model(
-    plate: int = 5309, mjd: int = 55929, fiber_id: int = 362
+    plate: int = 5309, mjd: int = 55929, fiber_id: int = 362, z_qso: float = 3.166
 ) -> DLAGPMAT:
     """
     Return a DLAGP instance from an input SDSS DR12 spectrum.
@@ -326,8 +331,6 @@ def prepare_dla_model(
 
     if not os.path.exists(filename):
         retrieve_raw_spec(plate, mjd, fiber_id)  # the spectrum at paper
-
-    z_qso = 3.166
 
     param = Parameters()
 
@@ -358,3 +361,44 @@ def prepare_dla_model(
     )
 
     return dla_gp
+
+def prepare_subdla_model(
+    plate: int = 5309, mjd: int = 55929, fiber_id: int = 362, z_qso: float = 3.166
+) -> SubDLAGPMAT:
+    """
+    Return a SubDLAGP instance from an input SDSS DR12 spectrum.
+    """
+    filename = "spec-{}-{}-{}.fits".format(plate, mjd, str(fiber_id).zfill(4))
+
+    if not os.path.exists(filename):
+        retrieve_raw_spec(plate, mjd, fiber_id)  # the spectrum at paper
+
+    param = Parameters()
+
+    # prepare these files by running the MATLAB scripts until build_catalog.m
+    prior = PriorCatalog(
+        param,
+        "data/dr12q/processed/catalog.mat",
+        "data/dla_catalogs/dr9q_concordance/processed/los_catalog",
+        "data/dla_catalogs/dr9q_concordance/processed/dla_catalog",
+    )
+    subdla_samples = SubDLASamplesMAT(
+        param, prior, "data/dr12q/processed/subdla_samples.mat"
+    )
+
+    wavelengths, flux, noise_variance, pixel_mask = read_spec(filename)
+    rest_wavelengths = param.emitted_wavelengths(wavelengths, z_qso)
+
+    # DLA GP Model
+    subdla_gp = SubDLAGPMAT(
+        param,
+        prior,
+        subdla_samples,
+        3000.0,
+        "data/dr12q/processed/learned_qso_model_lyseries_variance_kim_dr9q_minus_concordance.mat",
+    )
+    subdla_gp.set_data(
+        rest_wavelengths, flux, noise_variance, pixel_mask, z_qso, build_model=True
+    )
+
+    return subdla_gp

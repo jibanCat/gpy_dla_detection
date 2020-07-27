@@ -1,5 +1,9 @@
 """
-A GP class for having multiple DLAs intervening in a given slightline. 
+A GP class for having at subDLAs intervening in a given slightline.
+
+This is basically the same as .dla_gp, but has different priors on
+logNHI and model prior. In order to not overwrite the class method
+in .dla_gp.DLAGP, I chose to inherent from .null_gp.NullGP.
 """
 from typing import Tuple, Optional
 
@@ -11,18 +15,20 @@ from .model_priors import PriorCatalog
 from .null_gp import NullGP
 from .voigt import voigt_absorption
 
-# this could be replaced to DLASamples in the future;
+# this could be replaced to SubDLASamples in the future;
 # I import this is for the convenient of my autocomplete
-from .dla_samples import DLASamplesMAT
+from .subdla_samples import SubDLASamplesMAT
 
 
-class DLAGP(NullGP):
+class SubDLAGP(NullGP):
     """
-    DLA GP model for QSO emission + DLA intervening:
+    SubDLA GP model for QSO emission + DLA intervening:
         p(y | λ, σ², M, ω, c₀, τ₀, β, τ_kim, β_kim, z_dla, logNHI)
 
     additional two parameters (z_dla, logNHI) will control the position
     and the strength of the absorption intervening on the QSO emission.
+
+    SubDLA parameter prior : logNHI ~ U(19.5, 20)
 
     Since the integration is not tractable, so we use QMC to approximate
     the model evidence. 
@@ -48,7 +54,7 @@ class DLAGP(NullGP):
         self,
         params: Parameters,
         prior: PriorCatalog,
-        dla_samples: DLASamplesMAT,
+        dla_samples: SubDLASamplesMAT,
         rest_wavelengths: np.ndarray,
         mu: np.ndarray,
         M: np.ndarray,
@@ -78,7 +84,7 @@ class DLAGP(NullGP):
 
         self.dla_samples = dla_samples
 
-    def log_model_evidences(self, max_dlas: int) -> np.ndarray:
+    def log_model_evidences(self, max_dlas: int = 1) -> np.ndarray:
         """
         marginalize out the DLA parameters, {(z_dla_i, logNHI_i)}_{i=1}^k_dlas,
         and return an array of log_model_evidences for 1:k DLA models
@@ -108,7 +114,7 @@ class DLAGP(NullGP):
         sample_log_likelihoods[:] = np.nan
 
         # prepare z_dla samples
-        sample_z_dlas = self.dla_samples.sample_z_dlas(
+        sample_z_dlas = self.dla_samples.sample_z_lls(
             self.this_wavelengths, self.z_qso
         )
 
@@ -305,15 +311,22 @@ class DLAGP(NullGP):
         and
 
             P(at least k DLA | zQSO) = (M / N)^k
-        
-        Note: I did not overwrite the NullGP log prior, name of this method is log_prior's'
-        for multi-DLAs
+
+        For subDLAs, we need to adjust the model prior with the ratio
+        of the normalization factors:
+
+            P(at least 1 subDLA | zQSO) = P(at least 1 DLA | zQSO)
+              = Z_lls / Z_dla * M / N        
         """
         this_num_dlas, this_num_quasars = self.prior.less_ind(z_qso)
 
         log_priors_dla = np.zeros((max_dlas,))
 
-        p_dlas = (this_num_dlas / this_num_quasars) ** np.arange(1, max_dlas + 1)
+        p_dlas = (
+            self.dla_samples._Z_lls
+            / self.dla_samples._Z_dla
+            * (this_num_dlas / this_num_quasars) ** np.arange(1, max_dlas + 1)
+        )
 
         for i in range(max_dlas):
             p_dlas[i] = p_dlas[i] - np.sum(p_dlas[(i + 1) :])
@@ -323,16 +336,19 @@ class DLAGP(NullGP):
         return log_priors_dla
 
 
-class DLAGPMAT(DLAGP):
+class SubDLAGPMAT(SubDLAGP):
     """
     Load learned model from .mat file
+
+    The learned file is the same as DLAGP,
+    the sample file is different.
     """
 
     def __init__(
         self,
         params: Parameters,
         prior: PriorCatalog,
-        dla_samples: DLASamplesMAT,
+        dla_samples: SubDLASamplesMAT,
         min_z_separation: float = 3000.0,
         learned_file: str = "learned_qso_model_lyseries_variance_kim_dr9q_minus_concordance.mat",
     ):
