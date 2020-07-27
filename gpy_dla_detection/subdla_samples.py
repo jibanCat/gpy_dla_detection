@@ -96,6 +96,7 @@ class SubDLASamplesMAT(SubDLASamples):
     def Z_dla(self) -> float:
         return self._Z_dla
 
+    @property
     def Z_lls(self) -> float:
         return self._Z_lls
 
