@@ -15,6 +15,8 @@ from .voigt import voigt_absorption
 # I import this is for the convenient of my autocomplete
 from .dla_samples import DLASamplesMAT
 
+from profilehooks import profile
+
 
 class DLAGP(NullGP):
     """
@@ -209,9 +211,11 @@ class DLAGP(NullGP):
         # store sample likelihoods for MAP value calculation
         # this could cause troubles for parallelization in the future
         self.sample_log_likelihoods = sample_log_likelihoods
+        self.base_sample_inds = base_sample_inds
 
         return log_likelihoods_dla
 
+    @profile
     def sample_log_likelihood_k_dlas(
         self, z_dlas: np.ndarray, nhis: np.ndarray
     ) -> float:
@@ -321,6 +325,52 @@ class DLAGP(NullGP):
             log_priors_dla[i] = np.log(p_dlas[i])
 
         return log_priors_dla
+
+    def maximum_a_posteriori(self):
+        """
+        Find the maximum a posterior parameter pair {(z_dla, logNHI)}_{i=1}^k.
+
+        :return (MAP_z_dla, MAP_log_nhi): shape for each is (max_dlas, max_dlas),
+            the 0 dimension is for DLA(k) model and the 1 dimension is for
+            the MAP estimates.
+        """
+        maxinds = np.nanargmax(self.sample_log_likelihoods, axis=0)
+
+        max_dlas = self.sample_log_likelihoods.shape[1]
+
+        MAP_z_dla = np.empty((max_dlas, max_dlas))
+        MAP_log_nhi = np.empty((max_dlas, max_dlas))
+        MAP_z_dla[:] = np.nan
+        MAP_log_nhi[:] = np.nan
+
+        # prepare z_dla samples
+        sample_z_dlas = self.dla_samples.sample_z_dlas(
+            self.this_wavelengths, self.z_qso
+        )
+
+        for num_dlas, maxind in enumerate(maxinds):
+            # store k MAP estimates for DLA(k) model
+            if num_dlas > 0:
+                # all_z_dlas : (num_dlas, num_dla_samples)
+                ind = self.base_sample_inds[
+                    :num_dlas, maxind
+                ]  # (num_dlas - 1, num_dla_samples)
+
+                MAP_z_dla[num_dlas, : (num_dlas + 1)] = np.concatenate(
+                    [[sample_z_dlas[maxind]], sample_z_dlas[ind]]
+                )  # (num_dlas, )
+                MAP_log_nhi[num_dlas, : (num_dlas + 1)] = np.concatenate(
+                    [
+                        [self.dla_samples.log_nhi_samples[maxind]],
+                        self.dla_samples.log_nhi_samples[ind],
+                    ]
+                )
+            # for DLA(1) model, only store one MAP estimate
+            else:
+                MAP_z_dla[num_dlas, 0] = sample_z_dlas[maxind]
+                MAP_log_nhi[num_dlas, 0] = self.dla_samples.log_nhi_samples[maxind]
+
+        return MAP_z_dla, MAP_log_nhi
 
 
 class DLAGPMAT(DLAGP):
