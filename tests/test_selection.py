@@ -99,6 +99,6 @@ def test_p_dlas(num_quasars: int = 10):
 
         print("Num DLAs")
         print("----")
-        print("Catalogue:", map_num_dlas)
-        print("Python code:", MAP_num_dlas[:num_quasars])
-        assert np.all(MAP_num_dlas[:num_quasars] == map_num_dlas)
+        print("Catalogue:", map_num_dlas[:num_quasars])
+        print("Python code:", MAP_num_dlas)
+        assert np.all(MAP_num_dlas == map_num_dlas[:num_quasars])
