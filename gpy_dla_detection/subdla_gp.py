@@ -267,7 +267,7 @@ class SubDLAGP(NullGP):
         k_dlas = len(z_dlas)
 
         # to retain only unmasked pixels from computed absorption profile
-        mask_ind = ~self.pixel_mask[self.ind]
+        mask_ind = ~self.pixel_mask[self.ind_unmasked]
 
         # absorption corresponding to this sample
         absorption = voigt_absorption(
