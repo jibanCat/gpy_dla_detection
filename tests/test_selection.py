@@ -91,7 +91,7 @@ def test_p_dlas(num_quasars: int = 10):
         print("----")
         print("Catalogue:", p_dlas[:num_quasars])
         print("Python code:", f["p_dlas"][()])
-        assert np.all(np.abs(p_dlas[:num_quasars] - f["p_dlas"][()]) < 1e-2)
+        assert np.all(np.abs(p_dlas[:num_quasars] - f["p_dlas"][()]) < 5e-2)
 
         MAP_num_dlas = np.nanargmax(f["model_posteriors"][()], axis=1)
         MAP_num_dlas = MAP_num_dlas - 1
