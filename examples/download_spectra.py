@@ -54,5 +54,5 @@ def download_ho_2020_spectrum(num_quasars: int = 5):
 
         print(filename)
 
-        # if not os.path.exists(filename):
-        #     retrieve_raw_spec(plate, mjd, fiber_id)  # the spectrum at paper
+        if not os.path.exists(filename):
+            retrieve_raw_spec(plate, mjd, fiber_id)  # the spectrum at paper
