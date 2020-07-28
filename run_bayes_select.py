@@ -28,7 +28,7 @@ import argparse
 def process_qso(
     qso_list: List,
     z_qso_list: List,
-    read_spec=[read_spec.read_spec],
+    read_spec=read_spec.read_spec,
     max_dlas: int = 4,
 ):
     """
@@ -260,6 +260,9 @@ def process_qso(
         f.create_dataset("MAP_z_dlas", data=MAP_z_dlas)
         f.create_dataset("MAP_log_nhis", data=MAP_log_nhis)
 
+        f.create_dataset("p_dlas", data=p_dlas)
+        f.create_dataset("p_no_dlas", data=p_no_dlas)
+        f.create_dataset("model_posteriors", data=model_posteriors)
 
 if __name__ == "__main__":
 
