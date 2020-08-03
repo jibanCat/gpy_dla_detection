@@ -132,6 +132,8 @@ def process_qso(
     for quasar_ind, (filename, z_qso) in enumerate(zip(qso_list, z_qso_list)):
         tic = time.time()
 
+        np.random.seed(0)
+
         wavelengths, flux, noise_variance, pixel_mask = read_spec(filename)
         rest_wavelengths = param.emitted_wavelengths(wavelengths, z_qso)
 
