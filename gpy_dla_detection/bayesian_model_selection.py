@@ -46,7 +46,7 @@ class BayesModelSelect:
         self.dla_model_ind = dla_model_ind
 
     def model_selection(
-        self, model_list: List[ Union[NullGP, SubDLAGP, DLAGP] ], z_qso: float
+        self, model_list: List[Union[NullGP, SubDLAGP, DLAGP]], z_qso: float
     ) -> np.ndarray:
         """
         Calculate the log model evidences and priors for each model
@@ -80,6 +80,7 @@ class BayesModelSelect:
         log_priors[0] = np.log(1 - np.exp(logsumexp(log_priors[1:])))
 
         # calculating model evidences
+        # [Prior] the indexing part of priors is tricky. Do the elementwise addition instead!
         for i, num_dlas in enumerate(self.all_max_dlas):
             # if this is null model
             if num_dlas == 0:
@@ -87,20 +88,19 @@ class BayesModelSelect:
                 log_likelihood_no_dla = model_list[i].log_model_evidence()
                 log_likelihoods.append([log_likelihood_no_dla])
 
-                log_posteriors.append([log_likelihood_no_dla + log_priors[i]])
-
             # if this is for DLA model or subDLA model
             else:
                 # model evidence
                 log_likelihoods_dla = model_list[i].log_model_evidences(num_dlas)
                 log_likelihoods.append(log_likelihoods_dla)
 
-                # model posteriors : this is a numpy array
-                log_posteriors.append(log_likelihoods_dla + log_priors[i])
-
         # flatten the nested list : this is due to each element
         log_likelihoods = np.array(list(chain(*log_likelihoods)))
-        log_posteriors = np.array(list(chain(*log_posteriors)))
+        # [Prior] elementwise addition
+        log_posteriors = log_likelihoods + log_priors
+
+        # [Prior] make sure prior assignment was correct
+        assert np.abs((log_likelihoods[-1] + log_priors[-1]) - log_posteriors[-1]) < 1e-4
 
         self.log_priors = log_priors
         self.log_likelihoods = log_likelihoods
