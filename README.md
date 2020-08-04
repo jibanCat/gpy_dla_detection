@@ -84,6 +84,67 @@ The `Prior` class is also modifiable. This class is in charge of model priors fo
 
 Users can also write their own `DLASamples` class to reflect their own priors on DLA parameters, (zDLA, logNHI).
 
+Python requirements
+-------------------
+
+- Python 3.5+: I use typing
+- numpy
+- scipy
+- matplotlib
+- h5py
+- astropy: for reading fits file
+
+To prevent users have troubles setting up the environment,
+here is the exact packages I used to run the tests (below is my `poetry` .toml file):
+
+```
+[tool.poetry]
+name = "gpy_dla_detection"
+version = "0.1.0"
+description = "Detecting damped Lyman alpha absorbers with Gaussian processes, in Python!"
+authors = ["mho026@ucr.edu"]
+
+[tool.poetry.dependencies]
+python = "^3.8"
+numpy = "^1.19.1"
+scipy = "^1.5.2"
+matplotlib = "^3.3.0"
+h5py = "^2.10.0"
+astropy = "^4.0.1"
+
+[tool.poetry.dev-dependencies]
+pytest = "^5.2"
+black = "^19.10b0"
+pylint = "^2.5.3"
+mypy = "^0.782"
+ipython = "^7.17.0"
+
+[build-system]
+requires = ["poetry>=0.12"]
+build-backend = "poetry.masonry.api"
+```
+
+The dependency:
+
+```
+astropy 4.0.1.post1 Community-developed python astronomy tools
+h5py 2.10.0 Read and write HDF5 files from Python
+├── numpy >=1.7
+└── six *
+matplotlib 3.3.0 Python plotting package
+├── cycler >=0.10
+│   └── six * 
+├── kiwisolver >=1.0.1
+├── numpy >=1.15
+├── pillow >=6.2.0
+├── pyparsing >=2.0.3,<2.0.4 || >2.0.4,<2.1.2 || >2.1.2,<2.1.6 || >2.1.6
+└── python-dateutil >=2.1
+    └── six >=1.5 
+numpy 1.19.1 NumPy is the fundamental package for array computing with Python.
+scipy 1.5.2 SciPy: Scientific Library for Python
+└── numpy >=1.14.5
+```
+
 Known caveats
 -------------
 
