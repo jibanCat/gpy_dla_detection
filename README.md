@@ -15,8 +15,8 @@ and
 > [astro-ph.CO]](https://arxiv.org/abs/2003.11036),
 
 all the intermediate data products including the Gaussian
-process null model described are acquired via running the MATLAB version of the code: https://github.com/rmgarnett/gp_dla_detection/.
-The design of this repo assumes users already had the learned GP model and the users want to use this trained model to apply one new quasar spectra.
+process null model could be acquired via running the MATLAB version of the code: https://github.com/rmgarnett/gp_dla_detection/.
+The design of this repo assumes users already had the learned GP model and the users want apply the trained model on new quasar spectra.
 
 The parameters are tunable in the `gpy_dla_detection.set_parameters.Parameters` as instance attributes. The provided parameters should
 exactly reproduce the catalog in the work of Ho-Bird-Garnett (2020);
