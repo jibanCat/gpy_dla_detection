@@ -5,6 +5,7 @@ import numpy as np
 import h5py
 import scipy
 from scipy import interpolate
+from scipy.linalg import lapack
 
 from .set_parameters import Parameters
 from .model_priors import PriorCatalog
@@ -133,6 +134,8 @@ class NullGP:
 
         # apply pixel mask and filter spectrum within modelling range
         ind = (self.x >= self.params.min_lambda) & (self.x <= self.params.max_lambda)
+        self.ind_unmasked = ind
+
         # keep complete copy of equally spaced wavelengths for absorption
         # computation; supposed to be observed wavelengths
         self.unmasked_wavelengths = Parameters.observed_wavelengths(self.x, z_qso)[ind]
@@ -300,7 +303,7 @@ class NullGP:
 
     @staticmethod
     def log_mvnpdf_low_rank(
-        y: np.ndarray, mu: np.ndarray, M: np.ndarray, d: np.ndarray
+        y: np.ndarray, mu: np.ndarray, M: np.ndarray, d: np.ndarray, scipy_lapack: bool = True
     ) -> float:
         """
         efficiently computes
@@ -332,8 +335,14 @@ class NullGP:
         # numpy cholesky returns lower triangle, different than MATLAB's upper triangle
         L = np.linalg.cholesky(B)
         # C = B^-1 M' D^-1
-        tmp = scipy.linalg.solve_triangular(L, D_inv_M.T, lower=True)  # (k, n_points)
-        C = scipy.linalg.solve_triangular(L.T, tmp, lower=False)  # (k, n_points)
+        if scipy_lapack:
+            tmp = np.matmul(lapack.dtrtri(np.asfortranarray(L), lower=1)[0], D_inv_M.T)
+            C = np.matmul(lapack.dtrtri(np.asfortranarray(L.T), lower=0)[0], tmp)
+        else:
+            tmp = scipy.linalg.solve_triangular(
+                L, D_inv_M.T, lower=True
+            )  # (k, n_points)
+            C = scipy.linalg.solve_triangular(L.T, tmp, lower=False)  # (k, n_points)
 
         K_inv_y = D_inv_y - np.matmul(D_inv_M, np.matmul(C, y))  # (n_points, 1)
 
@@ -382,18 +391,26 @@ class NullGPMAT(NullGP):
         prior: PriorCatalog,
         learned_file: str = "learned_qso_model_lyseries_variance_kim_dr9q_minus_concordance.mat",
     ):
-        learned = h5py.File(learned_file, "r")
+        with h5py.File(learned_file, "r") as learned:
+
+            rest_wavelengths = learned["rest_wavelengths"][:, 0]
+            mu = learned["mu"][:, 0]
+            M = learned["M"][()].T
+            log_omega = learned["log_omega"][:, 0]
+            log_c_0 = learned["log_c_0"][0, 0]
+            log_tau_0 = learned["log_tau_0"][0, 0]
+            log_beta = learned["log_beta"][0, 0]
 
         super().__init__(
             params,
             prior,
-            learned["rest_wavelengths"][:, 0],
-            learned["mu"][:, 0],
-            learned["M"][()].T,
-            learned["log_omega"][:, 0],
-            learned["log_c_0"][0, 0],
-            learned["log_tau_0"][0, 0],
-            learned["log_beta"][0, 0],
+            rest_wavelengths,
+            mu,
+            M,
+            log_omega,
+            log_c_0,
+            log_tau_0,
+            log_beta,
             prev_tau_0=0.0023,
             prev_beta=3.65,
         )

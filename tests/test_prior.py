@@ -67,15 +67,17 @@ def test_subdla_and_null_model_priors():
     # make sure they sum to the same value, since prior for
     # at least one DLA should equal to prior for exactly
     # one DLA + at least two DLAs.
-    assert np.abs(logsumexp(log_priors_1_dla) - logsumexp(log_priors_2_dla)) < 1e-2
-    assert np.abs(logsumexp(log_priors_2_dla) - logsumexp(log_priors_4_dla)) < 1e-2
+    assert np.abs(logsumexp(log_priors_1_dla) - logsumexp(log_priors_2_dla)) < 1e-4
+    print(logsumexp(log_priors_2_dla), logsumexp(log_priors_4_dla))
+    assert np.abs(logsumexp(log_priors_2_dla) - logsumexp(log_priors_4_dla)) < 1e-4
 
     # the prior values in the Ho-Bird-Garnett catalog
     catalog_log_priors = np.array(
         [-2.53774598, -4.97413739, -7.40285925, -9.74851888]
     )
     print(catalog_log_priors, log_priors_4_dla)
-    assert np.all(np.abs(log_priors_4_dla - catalog_log_priors) < 1e-4)
+    # the difference is large here due to the catalogue model prior has a bug hasn't fixed
+    assert np.all(np.abs(log_priors_4_dla - catalog_log_priors) < 1e-1)
 
     # check if the subDLA model priors make sense
     log_priors_1_subdla = subdla_gp.log_priors(subdla_gp.z_qso, 1)[0]
@@ -99,7 +101,7 @@ def test_subdla_and_null_model_priors():
 
     print("log p( no DLA | z_QSO ) : {:.5g}; MATLAB value: {:.5g}".format(
             log_prior_no_dla, catalog_log_prior_no_dla))
-    assert np.abs(log_prior_no_dla - catalog_log_prior_no_dla) < 1e-3
+    assert np.abs(log_prior_no_dla - catalog_log_prior_no_dla) < 1e-2
 
     # test 2
     dla_gp = prepare_dla_model(3816, 55272, 76, z_qso=3.68457627)
@@ -113,15 +115,16 @@ def test_subdla_and_null_model_priors():
     # make sure they sum to the same value, since prior for
     # at least one DLA should equal to prior for exactly
     # one DLA + at least two DLAs.
-    assert np.abs(logsumexp(log_priors_1_dla) - logsumexp(log_priors_2_dla)) < 5e-2
-    assert np.abs(logsumexp(log_priors_2_dla) - logsumexp(log_priors_4_dla)) < 5e-2 # TODO: the bug of MATLAB needs to be fix in the future
+    assert np.abs(logsumexp(log_priors_1_dla) - logsumexp(log_priors_2_dla)) < 1e-4
+    assert np.abs(logsumexp(log_priors_2_dla) - logsumexp(log_priors_4_dla)) < 1e-4
 
     # the prior values in the Ho-Bird-Garnett catalog
     catalog_log_priors = np.array(
         [-2.40603132, -4.69090863, -6.96539755, -9.14424546]
     )
     print(catalog_log_priors, log_priors_4_dla)
-    assert np.all(np.abs(log_priors_4_dla - catalog_log_priors) < 1e-3)
+    # the difference is large here due to the catalogue model prior has a bug hasn't fixed    
+    assert np.all(np.abs(log_priors_4_dla - catalog_log_priors) < 1e-1)
 
     # check if the subDLA model priors make sense
     log_priors_1_subdla = subdla_gp.log_priors(subdla_gp.z_qso, 1)[0]
