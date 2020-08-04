@@ -1,5 +1,5 @@
-DLA detection pipleine for BOSS quasar spectra
-==============================================
+DLA detection pipleine for BOSS quasar spectra, **in Python**
+=============================================================
 
 This code repository contains code to completely reproduce the DLA
 catalog reported in
@@ -8,31 +8,22 @@ catalog reported in
 > Absorbers with Gaussian Processes. [arXiv:1605.04460
 > [astro-ph.CO]](https://arxiv.org/abs/1605.04460),
 
-including all intermediate data products including the Gaussian
-process null model described therein. The provided parameters should
-exactly reproduce the catalog in that work; however, you may feel free
-to modify these choices as you see fit.
+and
 
-The pipeline has multiple stages, outlined and documented below.
+> M-F Ho, S Bird, and R Garnett. Detecting Multiple DLAs per
+> Spectrum in SDSS DR12 with Gaussian Processes. [arXiv:2003.11036
+> [astro-ph.CO]](https://arxiv.org/abs/2003.11036),
 
-Loading catalogs and downloading spectra
+all the intermediate data products including the Gaussian
+process null model described are acquired via running the MATLAB version of the code: https://github.com/rmgarnett/gp_dla_detection/.
+The design of this repo assumes users already had the learned GP model and the users want to use this trained model to apply one new quasar spectra.
+
+The parameters are tunable in the `gpy_dla_detection.set_parameters.Parameters` as instance attributes. The provided parameters should
+exactly reproduce the catalog in the work of Ho-Bird-Garnett (2020);
+however, you may feel free to modify these choices as you see fit.
+
+Downloading the external DLA catalogues and the learned model
 ----------------------------------------
-
-The first step of the process is to load the DR12Q quasar catalog and
-available DLA catalogs, extract some basic data such as redshift,
-coordinates, etc., and apply some basic filtering to the spectra:
-
-* spectra with z < 2.15 are filtered
-* spectra identified in a visual survey to have broad absorption line
-  (BAL) features are filtered
-
-Relevant parameters in `set_parameters` that can be tweaked if desired:
-
-    % preprocessing parameters
-    z_qso_cut      = 2.15;                        % filter out QSOs with z less than this threshold
-
-This process proceeds in three steps, alternating between the shell
-and MATLAB.
 
 First we download the raw catalog data:
 
@@ -40,276 +31,62 @@ First we download the raw catalog data:
     cd data/scripts
     ./download_catalogs.sh
 
-Then we load these catalogs into MATLAB:
-
-    % in MATLAB
-    set_parameters;
-    build_catalogs;
-
-The `build_catalogs` script will produce a file called `file_list` in
-the `data/dr12q/spectra` directory containing relative paths to
-yet-unfiltered SDSS spectra for download. The `file_list` output is
-available in this repository in the same location. The next step is to
-download the coadded "speclite" SDSS spectra for these observations
-(warning: total download is 35 GB). The `download_spectra.sh` script
-requires `wget` to be available. On OS X systems, this may be
-installed easily with [Homebrew](http://brew.sh/index.html).
+The learned model of Ho-Bird-Garnett (2020) is publicly available here:
+http://tiny.cc/multidla_catalog_gp_dr12q
+The required `.mat` files for this Python repo are:
+- The GP model: [learned_qso_model_lyseries_variance_kim_dr9q_minus_concordance.mat](https://drive.google.com/file/d/16n7cDNyXmwoHOw9jFiF5em1z8Q4hQkED/view?usp=sharing) 
+- DLA samples for Quasi-Monte Carlo integration: [dla_samples_a03.mat](https://drive.google.com/file/d/1pE5nFkMvXPmSJimr6uXBRUWNYZhp9h00/view?usp=sharing)
+- SubDLA samples for Quasi-Monte Carlo integration: [subdla_samples.mat](https://drive.google.com/file/d/1UFdsFAiYNU8QdGph4UY3B86W-ge-112n/view?usp=sharing)
+- The SDSS DR12 QSO catalogue, including the `filter_flags` we used to train the GP model: [catalog.mat](https://drive.google.com/file/d/1-DE6NdFhaEcI0bk-l-GiN2DzxoWoLW-L/view?usp=sharing)
 
-    # in shell
-    cd data/scripts
-    ./download_spectra.sh
+The above files should be placed in `data/dr12q/processed/` (this folder would be created after running `download_catalogs.sh`).
 
-`download_spectra.sh` will download the observational data for the yet
-unfiltered lines of sight to the `data/dr12q/spectra` directory.
-
-Loading and preprocessing spectra
----------------------------------
 
-Now we load these data, continue applying filters, and do some basic
-preprocessing. The additional filters are:
-
-* spectra that have no nonmasked pixels in the range [1310, 1325]
-  Angstroms (QSO restframe) are filtered, as they cannot be normalized
-* spectra with fewer than 200 nonmasked pixels in the range [911,
-  1217] Angstroms (QSO restframe) are filtered.
-
-The preprocessing steps are to:
-
-* truncate spectra to only contain pixels in the range [911, 1217]
-  Angstroms QSO rest
-* normalize flux and noise variance by dividing by the median flux in
-  the range [1310, 1325] Angstroms QSO rest
-
-Relevant parameters in `set_parameters` that can be tweaked if
-desired:
-
-    % preprocessing parameters
-    min_num_pixels = 200;                         % minimum number of non-masked pixels
-
-    % normalization parameters
-    normalization_min_lambda = 1310;              % range of rest wavelengths to use   Å
-    normalization_max_lambda = 1325;              %   for flux normalization
-
-    % file loading parameters
-    loading_min_lambda = 910;                     % range of rest wavelengths to load  Å
-    loading_max_lambda = 1217;
-
-When ready, the MATLAB code to preload the spectra is:
-
-    set_parameters;
-    release = 'dr12q';
-
-    file_loader = @(plate, mjd, fiber_id) ...
-      (read_spec(sprintf('%s/%i/spec-%i-%i-%04i.fits', ...
-        spectra_directory(release),                  ...
-        plate,                                       ...
-        plate,                                       ...
-        mjd,                                         ...
-        fiber_id)));
-
-    preload_qsos;
+Reproducing Ho-Bird-Garnett (2020) predictions
+----------------------------------------------
 
-The result will be a completed catalog data file,
-`data/[release]/processed/catalog.mat`, with complete filtering
-information and a file containing preloaded and preprocessed data for
-the 162861 nonfiltered spectra,
-`data/[release]/processed/preloaded_qsos.mat`.
-
-Building GP models for quasar spectra
--------------------------------------
-
-Now we build our models, including our Gaussian process null model for
-quasar emission spectra and our model for spectra containing DLAs.
-
-To build the null model for quasar emission spectra, we need to
-indicate a set of spectra to use for training, which should be
-nominally DLA-free. Here we select all spectra:
-
-* in DR9
-* not removed by our filtering steps during loading
-* in the DR9 Lyman-alpha forest catalog, and
-* not in the DR9 Lyman-alpha DLA concordance catalog
-
-These particular choices may be accomplished with:
+We provide a simple Python script, `run_bayes_select.py` , to reproduce the MATLAB code `multi_dlas/process_qsos_multiple_dlas_meanflux.m` and create a HDF5 catalogue in the end with the posterior probability of having DLAs in a given spectrum.
 
-    training_release  = 'dr12q';
-    dla_catalog_name = 'dr9q_concordance';
-    train_ind = ...
-        [' catalog.in_dr9                     & ' ...
-         '(catalog.filter_flags == 0)         & ' ...
-         ' catalog.los_inds(dla_catalog_name) & ' ...
-         '~catalog.dla_inds(dla_catalog_name)'];
+**(Note: we tried to make the saved variables in the output HDF5 file to be the same as the MATLAB version of the `.mat` catalogue file, though there are still some differences.)**
 
-After specifying the spectra to use in `training_release` and
-`train_ind`, we call `learn_qso_model` to learn the model.
-To learn the model, you will need the MATLAB toolbox
-[minFunc](https://www.cs.ubc.ca/~schmidtm/Software/minFunc.html)
-available from Mark Schmidt.
-
-You should cd to the directory where you installed minFunc to and run:
+All the parameters and filepaths are hard-coded in this script to ensure we can exactly reproduce the results of Ho-Bird-Garnett DLA catalogue.
 
-    addpath(genpath(pwd));
-    mexAll;
-
-to initialize minFunc before the first time you use it.
+To run this Python script, do:
 
-Relevant parameters in `set_parameters` that can be tweaked if
-desired:
-
-    % null model parameters
-    min_lambda         =  911.75;                 % range of rest wavelengths to       Å
-    max_lambda         = 1215.75;                 %   model
-    dlambda            =    0.25;                 % separation of wavelength grid      Å
-    k                  = 20;                      % rank of non-diagonal contribution
-    max_noise_variance = 1^2;                     % maximum pixel noise allowed during model training
-
-    % optimization parameters
-    initial_c     = 0.1;                          % initial guess for c
-    initial_tau_0 = 0.0023;                       % initial guess for τ₀
-    initial_beta  = 3.65;                         % initial guess for β
-    minFunc_options =               ...           % optimization options for model fitting
-        struct('MaxIter',     2000, ...
-               'MaxFunEvals', 4000);
+    # in shell, to make predictions on two QSO spectra.
+    python run_bayes_select.py --qso_list spec1.fits spec2.fits --z_qso_list z_qso1 z_qso2
 
-When ready, the MATLAB code to learn the null quasar emission model
-is:
-
-    training_set_name = 'dr9q_minus_concordance';
-    learn_qso_model;
+This is assumed the fits files are SDSS DR12Q spectra.
+Users can re-design the spectrum reading function by following same input arguments and outputs.
+The default fits file reader is `gpy_dla_detection.read_spec.read_spec`.
 
-The learned qso model is stored in
-`data/[training_release]/processed/learned_qso_model_[training_set_name].mat`.
-
-We also need to specify a set of DLA parameter samples for the DLA
-model. This is handled by the `generate_dla_samples` script.
+Users can run the test function `tests.test_selection.test_p_dlas(10)` to get the first 10 DLA predictions from Ho-Bird-Garnett (2020):
 
-Relevant parameters in `set_parameters` that can be tweaked if
-desired:
+    # Download the test spectra first, in bash:
+    python -c "from examples.download_spectra import *; download_ho_2020_spectrum(10)"
+    # And run the test:
+    python -c "from tests.test_selection import *; test_p_dlas(10)"
 
-    % DLA model parameters: parameter samples
-    num_dla_samples     = 10000;                  % number of parameter samples
-    alpha               = 0.9;                    % weight of KDE component in mixture
-    uniform_min_log_nhi = 20.0;                   % range of column density samples    [cm⁻²]
-    uniform_max_log_nhi = 23.0;                   % from uniform distribution
-    fit_min_log_nhi     = 20.0;                   % range of column density samples    [cm⁻²]
-    fit_max_log_nhi     = 22.0;                   % from fit to log PDF
-
-When ready, the MATLAB code to generate the DLA model parameter
-samples is:
 
-    training_release  = 'dr12q';
-    generate_dla_samples;
-
-Processing spectra for DLA detection
-------------------------------------
-
-Finally, we may use our built model to compute the posterior
-probability of containing a DLA along the line of sight as described
-in the paper above.
-
-The processing code requires the C helper function `voigt.c` to be
-compiled to compute Voigt profiles quickly from MATLAB. This requires
-the [`libcerf`](http://apps.jcns.fz-juelich.de/doku/sc/libcerf)
-library to be installed. This is available
-from [Homebrew-science](https://github.com/Homebrew/homebrew-science)
-for OS X users. The code for this is:
-
-    % in MATLAB
-    mex voigt.c -lcerf
-
-To perform a DLA search, we must specify a few things first. First, we
-must specify which quasar emission model to use; to select the one
-learned above, we may use
-
-    % specify the learned quasar model to use
-    training_release  = 'dr12q';
-    training_set_name = 'dr9q_minus_concordance';
-
-(the code will attempt to load the model from a file called
-`data/[training_release]/processed/learned_qso_model_[training_set_name].mat`.)
-
-Next, we must specify which spectra to use to compute the DLA model
-prior Pr(M_DLA). Here we select all spectra that are:
-
-* in DR9
-* in the DR9 Lyman-alpha forest catalog, and
-* not filtered by our filtering steps above.
-
-These choices can be realized with:
-
-    % specify the spectra to use for computing the DLA existence prior
-    dla_catalog_name  = 'dr9q_concordance';
-    prior_ind = ...
-        [' prior_catalog.in_dr9 & ' ...
-         ' prior_catalog.los_inds(dla_catalog_name) & ' ...
-         '(prior_catalog.filter_flags == 0)'];
-
-Next, we must specify which spectra to search for DLAs. Here we use
-all DR12Q spectra that were not filtered:
-
-    % specify the spectra to process
-    release = 'dr12q';
-    test_set_name = 'dr12q';
-    test_ind = '(catalog.filter_flags == 0)';
-
-Relevant parameters in `set_parameters` that can be tweaked if
-desired, including function handles specifying the range of z_DLA to
-search:
-
-    % model prior parameters
-    prior_z_qso_increase = kms_to_z(30000);       % use QSOs with z < (z_QSO + x) for prior
-
-    % instrumental broadening parameters
-    width = 3;                                    % width of Gaussian broadening (# pixels)
-    pixel_spacing = 1e-4;                         % wavelength spacing of pixels in dex
-
-    % DLA model parameters: absorber range and model
-    num_lines = 3;                                % number of members of the Lyman series to use
-
-    max_z_cut = kms_to_z(3000);                   % max z_DLA = z_QSO - max_z_cut
-    max_z_dla = @(wavelengths, z_qso) ...         % determines maximum z_DLA to search
-        (max(wavelengths) / lya_wavelength - 1) - max_z_cut;
-
-    min_z_cut = kms_to_z(3000);                   % min z_DLA = z_Ly∞ + min_z_cut
-    min_z_dla = @(wavelengths, z_qso) ...         % determines minimum z_DLA to search
-    max(min(wavelengths) / lya_wavelength - 1,                          ...
-        observed_wavelengths(lyman_limit, z_qso) / lya_wavelength - 1 + ...
-        min_z_cut);
-
-When ready, the selected spectra can be processed with `process_qsos`.
-This script will write the results in
-`data/[release]/processed_qsos_[test_set_name].mat`.
-
-The complete code for processing the spectra in MATLAB is:
-
-    % produce catalog searching [Lyoo + 3000 km/s, Lya - 3000 km/s]
-    set_parameters;
-
-    % specify the learned quasar model to use
-    training_release  = 'dr12q';
-    training_set_name = 'dr9q_minus_concordance';
-
-    % specify the spectra to use for computing the DLA existence prior
-    dla_catalog_name  = 'dr9q_concordance';
-	prior_ind = ...
-        [' prior_catalog.in_dr9 & '             ...
-         '(prior_catalog.filter_flags == 0) & ' ...
-         ' prior_catalog.los_inds(dla_catalog_name)'];
-
-    % specify the spectra to process
-    release = 'dr12q';
-    test_set_name = 'dr12q';
-    test_ind = '(catalog.filter_flags == 0)';
-
-    % process the spectra
-    process_qsos;
-
-Finally, we may create an ASCII catalog of the results if desired with
-`generate_ascii_catalog`, e.g.:
-
-    set_parameters;
-    training_release  = 'dr12q';
-    release = 'dr12q';
-    test_set_name = 'dr12q';
-
-    generate_ascii_catalog;
+For developers
+--------------
+
+There are some tunable parameters defined in `gpy_dla_detection.set_parameters.Parameters`.
+The following parameters will directly affect the DLA predictions:
+
+- `prior_z_qso_increase: float = 30000.0`: DLA existence prior is defined in Garnett (2017) as (prior.z_qsos < (z_qso + prior_z_qso_increase)).
+- `num_lines: int = 3`: The number of members of the Lyman series to use in DLA profiles.
+- `max_z_cut: float = 3000.0`: The maximum search range for zDLA sampling is `max z_DLA = z_QSO - max_z_cut`.
+- `min_z_cut: float = 3000.0`: The minimum search range for zDLA sampling is `min z_DLA = z_Ly∞ + min_z_cut`.
+- `num_forest_lines: int = 31`: The number of Lyman-series forest to suppress the mean GP model to mean-flux. 
+
+The `Prior` class is also modifiable. This class is in charge of model priors for different GP models. Users can write a custom Prior class to reflect their prior belief on their own datasets.
+
+Users can also write their own `DLASamples` class to reflect their own priors on DLA parameters, (zDLA, logNHI).
+
+Known caveats
+-------------
+
+- The Quasi-Monte Carlo sampling in `dla_gp.log_model_evidences` has not parallelized yet.
+- The DLA profile `voigt.voigt_absorption` is not very efficient.
+- The overall speed of this Python code is roughly 10 times slower than the MATLAB counterpart on a 32 core machine.
