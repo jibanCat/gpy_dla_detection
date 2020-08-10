@@ -10,8 +10,6 @@ Note:
 I keep the variables of Lyman series in this file to
 reflect the same structure as Roman's code, but they
 could be moved to set_parameters.py in the future.
-
-TODO: instrumental boardening
 """
 import numpy as np
 from scipy.special import wofz
@@ -255,7 +253,7 @@ def voigt_absorption(
     nhi: float,
     z_dla: float,
     num_lines: int = 3,
-    boardening: bool = True,
+    broadening: bool = True,
 ) -> np.ndarray:
     """
     Voigt line profile for absorptions
@@ -310,7 +308,7 @@ def voigt_absorption(
 
     raw_profile[:] = np.exp(np.float(nhi) * np.nansum(total, axis=0))
 
-    if boardening:
+    if broadening:
         # num_points = len(profile)
 
         # # instrumental broadening

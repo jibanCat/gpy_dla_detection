@@ -5,7 +5,7 @@ import numpy as np
 from gpy_dla_detection.voigt import voigt_absorption, instrument_profile, width
 
 
-def test_instrumental_boardening():
+def test_instrumental_broadening():
     # test 1
     z_qso = 3.15
     wavelengths = np.linspace(911, 1216, 1000) * (1 + z_qso)
@@ -14,7 +14,7 @@ def test_instrumental_boardening():
     nhi = 10 ** 20.3
 
     raw_profile = voigt_absorption(
-        wavelengths, nhi, z_dla, num_lines=3, boardening=False
+        wavelengths, nhi, z_dla, num_lines=3, broadening=False
     )
 
     # the convolution written in Roman's code
@@ -39,7 +39,7 @@ def test_instrumental_boardening():
     nhi = 10 ** 21
 
     raw_profile = voigt_absorption(
-        wavelengths, nhi, z_dla, num_lines=5, boardening=False
+        wavelengths, nhi, z_dla, num_lines=5, broadening=False
     )
 
     # the convolution written in Roman's code
