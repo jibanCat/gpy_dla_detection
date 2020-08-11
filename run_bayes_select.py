@@ -30,6 +30,7 @@ def process_qso(
     z_qso_list: List,
     read_spec=read_spec.read_spec,
     max_dlas: int = 4,
+    broadening: bool = True,
 ):
     """
     Read fits file from qso_list and process each QSO with Bayesian model selection.
@@ -37,8 +38,9 @@ def process_qso(
     :param qso_list: a list of fits filenames
     :param z_qso_list: a list of zQSO corresponding to the spectra in the qso_list
     :param read_spec: a function to read the fits file.
+    :param broadening: whether to implement the instrumental broadening in the SDSS.
 
-    :return 
+    A HDF5 File will be saved after running this function.
 
     (Comments from the MATLAB code)
     Run DLA detection algorithm on specified objects while using
@@ -153,22 +155,24 @@ def process_qso(
         # {(z_dla, logNHI)}_{i=1}^{k} parameters. k stands for maximum DLA we want to model.
         # we will estimate log posteriors for DLA(1), ..., DLA(k) models.
         dla_gp = DLAGPMAT(
-            param,
-            prior,
-            dla_samples,
-            3000.0,
-            "data/dr12q/processed/learned_qso_model_lyseries_variance_kim_dr9q_minus_concordance.mat",
+            params=param,
+            prior=prior,
+            dla_samples=dla_samples,
+            min_z_separation=3000.0,
+            learned_file="data/dr12q/processed/learned_qso_model_lyseries_variance_kim_dr9q_minus_concordance.mat",
+            broadening=broadening,
         )
         dla_gp.set_data(
             rest_wavelengths, flux, noise_variance, pixel_mask, z_qso, build_model=True
         )
 
         subdla_gp = SubDLAGPMAT(
-            param,
-            prior,
-            subdla_samples,
-            3000.0,
-            "data/dr12q/processed/learned_qso_model_lyseries_variance_kim_dr9q_minus_concordance.mat",
+            params=param,
+            prior=prior,
+            dla_samples=subdla_samples,
+            min_z_separation=3000.0,
+            learned_file="data/dr12q/processed/learned_qso_model_lyseries_variance_kim_dr9q_minus_concordance.mat",
+            broadening=broadening,
         )
         subdla_gp.set_data(
             rest_wavelengths, flux, noise_variance, pixel_mask, z_qso, build_model=True
