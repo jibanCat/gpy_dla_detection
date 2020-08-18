@@ -436,9 +436,14 @@ def test_p_dlas(num_quasars: int = 10, broadening: bool = True):
         print("Python code:", f["p_dlas"][()])
         assert np.all(np.abs(p_dlas[:num_quasars] - f["p_dlas"][()]) < 5e-2)
 
-        MAP_num_dlas = np.nanargmax(f["model_posteriors"][()], axis=1)
-        MAP_num_dlas = MAP_num_dlas - 1
-        MAP_num_dlas[MAP_num_dlas < 0] = 0
+        # combine subDLAs and noDLAs posteriors together
+        model_posteriors = f["model_posteriors"][()]
+        p_no_dlas = f["p_no_dlas"][()]
+
+        model_posteriors = np.concatenate(
+            [p_no_dlas[:, None], model_posteriors[:, 2:]], axis=1
+        )
+        MAP_num_dlas = np.nanargmax(model_posteriors, axis=1)
 
         print("Num DLAs")
         print("----")
