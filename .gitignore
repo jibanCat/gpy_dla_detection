@@ -1,9 +1,0 @@
-data/
-.python-version
-.vscode/
-__pycache__/
-*.mat
-*.lock
-*.h5
-*.fits
-pyproject.toml
