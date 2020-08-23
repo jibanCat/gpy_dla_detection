@@ -166,7 +166,7 @@ def retrieve_raw_spec(plate: int, mjd: int, fiber_id: int, release: str = "dr12q
             "v5_13_0", plate, plate, mjd, fiber_id
         )
     else:
-        raise()
+        raise Exception("must choose between dr12q or dr14q!")
 
 
     print("[Info] retrieving {} ...".format(url), end=" ")
