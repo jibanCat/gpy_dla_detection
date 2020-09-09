@@ -4,9 +4,11 @@ using Ho-Bird-Garnett code in Python version.
 """
 from typing import Union, List, Optional
 
+import os
 import time
 import numpy as np
 import h5py
+from matplotlib import pyplot as plt
 
 from gpy_dla_detection import read_spec
 
@@ -22,6 +24,8 @@ from gpy_dla_detection.subdla_samples import SubDLASamplesMAT
 
 from gpy_dla_detection.bayesian_model_selection import BayesModelSelect
 
+from gpy_dla_detection.plottings.plot_model import plot_dla_model
+
 import argparse
 
 
@@ -31,6 +35,7 @@ def process_qso(
     read_spec=read_spec.read_spec,
     max_dlas: int = 4,
     broadening: bool = True,
+    plot_figures: bool = False,
 ):
     """
     Read fits file from qso_list and process each QSO with Bayesian model selection.
@@ -39,6 +44,8 @@ def process_qso(
     :param z_qso_list: a list of zQSO corresponding to the spectra in the qso_list
     :param read_spec: a function to read the fits file.
     :param broadening: whether to implement the instrumental broadening in the SDSS.
+    :param plot_figures: if True, plot the maximum a posteriori estimate of DLAs
+        into a plot, with the likelihoods in the parameter space.
 
     A HDF5 File will be saved after running this function.
 
@@ -206,7 +213,9 @@ def process_qso(
         ]
         base_sample_inds[quasar_ind, :, :] = dla_gp.base_sample_inds[:, :].T
 
-        sample_log_likelihoods_lls[quasar_ind, :] = subdla_gp.sample_log_likelihoods[:, 0]
+        sample_log_likelihoods_lls[quasar_ind, :] = subdla_gp.sample_log_likelihoods[
+            :, 0
+        ]
 
         # save maps: add the initializations of MAP values
         # N * (1~k models) * (1~k MAP dlas)
@@ -224,6 +233,16 @@ def process_qso(
         # very time consuming: ~ 4 mins for a single spectrum without parallelized.
         print("spent {} mins; {} seconds".format((toc - tic) // 60, (toc - tic) % 60))
 
+        # [make plots] plotting the inference results into
+        # GP mean model + sample likelihood scatter plot
+        if plot_figures:
+            title = "zQSO: {:.2g}; ".format(z_qso)
+            filename = "{}_{}".format(str(quasar_ind).zfill(6), filename.split(".")[0])
+            make_plots(
+                dla_gp=dla_gp, bayes=bayes, filename=filename, sub_dir="images", title=title
+            )
+            plt.clf()
+            plt.close()
 
     # write into HDF5 file
     with h5py.File("processed_qsos_multi_meanflux.h5", "w") as f:
@@ -269,6 +288,41 @@ def process_qso(
         f.create_dataset("p_dlas", data=p_dlas)
         f.create_dataset("p_no_dlas", data=p_no_dlas)
         f.create_dataset("model_posteriors", data=model_posteriors)
+
+
+def make_plots(
+    dla_gp: DLAGPMAT,
+    bayes: BayesModelSelect,
+    filename: str = "spec.pdf",
+    sub_dir: str = "images",
+    title: str = "",
+):
+    """
+    Make the GP mean model plot and the sample likelihood plots. 
+    """
+    # [title] include filename in the title
+    title += "{}; P(DLA | D) = ".format(filename)
+    # [title] include model posteriors
+    title += ", ".join(map(lambda x: "{:.2g}".format(x), bayes.model_posteriors))
+
+    if not os.path.exists(sub_dir):
+        os.mkdir(sub_dir)
+
+    # [DLA(k)] find the model with the highest posterior
+    ind = np.argmax(bayes.model_posteriors)
+    # [DLA(k)] determine how many no DLA models, subtract them
+    nth_dla = ind - bayes.dla_model_ind + 1
+
+    # [label] make label to be DLA(k) = P(k DLAs | D)
+    if nth_dla <= 0:
+        # P(no DLA | D) = P(null | D) + P(subDLA | D)
+        label = "P(no DLA | D) = {:.2g}".format(bayes.p_no_dla)
+    else:
+        label = "P(DLA({}) | D) = {:.2g}".format(nth_dla, bayes.model_posteriors[ind])
+
+    plot_dla_model(dla_gp=dla_gp, nth_dla=nth_dla, title=title, label=label)
+    plt.savefig(os.path.join(sub_dir, "{}.pdf".format(filename)), format="pdf", dpi=100)
+
 
 if __name__ == "__main__":
 
