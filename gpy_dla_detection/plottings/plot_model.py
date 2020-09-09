@@ -23,7 +23,7 @@ def plot_dla_model(
 
     plot_sample_likelihoods(dla_gp=dla_gp, ax=ax[0])
     # [label] e.g., spec-xxx-xxx-xxx
-    plot_this_mu(dla_gp=dla_gp, ax=ax[1], label=label)
+    plot_this_mu(dla_gp=dla_gp, nth_dla=nth_dla, ax=ax[1], label=label)
 
 
 def plot_this_mu(
@@ -56,7 +56,7 @@ def plot_this_mu(
     ax.plot(this_rest_wavelengths, this_flux, label=label, color="C0")
 
     # DLA model
-    if nth_dla >= 0:
+    if nth_dla > 0:
         # [MAP] maximum a posteriori values
         # N * (1~k models) * (1~k MAP dlas)
         MAP_z_dla, MAP_log_nhi = dla_gp.maximum_a_posteriori()
@@ -86,6 +86,7 @@ def plot_this_mu(
         )
 
     ax.set_xlim(this_rest_wavelengths.min(), this_rest_wavelengths.max())
+    ax.set_ylim( this_mu.min() - 2, this_mu.max() + 1 )
     ax.set_xlabel(r"Rest-Wavelength $\lambda_{\mathrm{rest}}$ $\AA$")
     ax.set_ylabel(r"Normalised Flux")
     ax.legend()
@@ -109,10 +110,17 @@ def plot_sample_likelihoods(dla_gp: DLAGP, ax: Optional[plt.axes] = None):
 
     colours = (sample_log_likelihoods - min_like) / (max_like - min_like)
 
+    # scale to make the colour more visible
+    # TODO: make it more reasonable. scatter only takes values between [0, 1].
+    colours = colours * 5 - 4
+    colours[colours < 0] = 0
+
     if not ax:
         fig, ax = plt.subplots(1, 1, figsize=(16, 5))
 
-    ax.scatter(sample_z_dlas, dla_gp.dla_samples.log_nhi_samples, c=colours)
+    ax.scatter(
+        sample_z_dlas, dla_gp.dla_samples.log_nhi_samples, c=colours,
+    )
 
     ax.set_xlim(sample_z_dlas.min(), sample_z_dlas.max())
     ax.set_ylim(
