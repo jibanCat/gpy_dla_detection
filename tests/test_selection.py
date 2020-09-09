@@ -425,9 +425,9 @@ filenames = [
 ]
 
 
-def test_p_dlas(num_quasars: int = 10, broadening: bool = True):
+def test_p_dlas(num_quasars: int = 10, broadening: bool = True, plot_figures: bool = False):
 
-    process_qso(filenames[:num_quasars], z_qsos[:num_quasars], broadening=broadening)
+    process_qso(filenames[:num_quasars], z_qsos[:num_quasars], broadening=broadening, plot_figures=plot_figures)
 
     with h5py.File("processed_qsos_multi_meanflux.h5", "r") as f:
         print("P(DLA | D)")

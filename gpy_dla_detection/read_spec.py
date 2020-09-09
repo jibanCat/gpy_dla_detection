@@ -35,7 +35,11 @@ def read_spec(filename: str) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.nda
     TODO: can I read zQSO from spec? I guess it depends on the fits files of different surveys
     """
     with fits.open(filename) as hdu:
-        data = hdu["COADD"].data
+        # [COADD missing] some newly downloaded data do not have COADD column
+        try:
+            data = hdu["COADD"].data
+        except KeyError as e:
+            data = hdu[1].data
 
         # coadded calibrated flux 10**-17 erg s**-1 cm**-2 A**-1
         flux = data["flux"]
