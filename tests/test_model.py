@@ -153,7 +153,7 @@ def test_log_likelihood_no_dla():
     plt.close()
 
 
-def test_dla_model():
+def test_dla_model(broadening: bool = True):
     # test 1
     filename = "spec-5309-55929-0362.fits"
 
@@ -185,6 +185,7 @@ def test_dla_model():
         dla_samples,
         3000.0,
         "data/dr12q/processed/learned_qso_model_lyseries_variance_kim_dr9q_minus_concordance.mat",
+        broadening,
     )
     dla_gp.set_data(
         rest_wavelengths, flux, noise_variance, pixel_mask, z_qso, build_model=True
@@ -215,7 +216,7 @@ def test_dla_model():
     assert sample_log_likelihood_dla > log_likelihood_no_dla
 
 
-def test_dla_model_evidences():
+def test_dla_model_evidences(broadening: bool = True):
     # test 1
     filename = "spec-5309-55929-0362.fits"
 
@@ -247,6 +248,7 @@ def test_dla_model_evidences():
         dla_samples,
         3000.0,
         "data/dr12q/processed/learned_qso_model_lyseries_variance_kim_dr9q_minus_concordance.mat",
+        broadening,
     )
     dla_gp.set_data(
         rest_wavelengths, flux, noise_variance, pixel_mask, z_qso, build_model=True
@@ -309,6 +311,7 @@ def test_prior():
         dla_samples,
         3000.0,
         "data/dr12q/processed/learned_qso_model_lyseries_variance_kim_dr9q_minus_concordance.mat",
+        True,
     )
     dla_gp.set_data(
         rest_wavelengths, flux, noise_variance, pixel_mask, z_qso, build_model=True
@@ -355,6 +358,7 @@ def prepare_dla_model(
         dla_samples,
         3000.0,
         "data/dr12q/processed/learned_qso_model_lyseries_variance_kim_dr9q_minus_concordance.mat",
+        True,
     )
     dla_gp.set_data(
         rest_wavelengths, flux, noise_variance, pixel_mask, z_qso, build_model=True
@@ -396,6 +400,7 @@ def prepare_subdla_model(
         subdla_samples,
         3000.0,
         "data/dr12q/processed/learned_qso_model_lyseries_variance_kim_dr9q_minus_concordance.mat",
+        True,
     )
     subdla_gp.set_data(
         rest_wavelengths, flux, noise_variance, pixel_mask, z_qso, build_model=True

@@ -46,8 +46,10 @@ class DLAGP(NullGP):
     :param log_beta: log β, the exponent of the effective optical depth in the absorption noise.
     :param prev_tau_0: τ_kim, the scale factor of effective optical depth used in mean-flux suppression.
     :param prev_beta: β_kim, the exponent of the effective optical depth used in mean-flux suppression.
+    :param broadening: whether to implement the SDSS instrumental broadening in the Voigt profile,
+        default is True.
 
-    Future: MCMC embedded in the class as an instance method.
+    ..Note: MCMC embedded in the class as an instance method.
     """
 
     def __init__(
@@ -65,6 +67,7 @@ class DLAGP(NullGP):
         prev_tau_0: float = 0.0023,
         prev_beta: float = 3.65,
         min_z_separation: float = 3000.0,
+        broadening: bool = True,
     ):
         super().__init__(
             params,
@@ -83,6 +86,8 @@ class DLAGP(NullGP):
         self.min_z_separation = self.params.kms_to_z(min_z_separation)
 
         self.dla_samples = dla_samples
+
+        self.broadening = broadening
 
     def log_model_evidences(self, max_dlas: int) -> np.ndarray:
         """
@@ -354,21 +359,30 @@ class DLAGP(NullGP):
         # to retain only unmasked pixels from computed absorption profile
         mask_ind = ~self.pixel_mask[self.ind_unmasked]
 
+        # [broadening] use the padded wavelengths for convolution
+        # otherwise, should use unmasked wavelengths.
+        if self.broadening:
+            wavelengths = self.padded_wavelengths
+        else:
+            wavelengths = self.unmasked_wavelengths
+
         # absorption corresponding to this sample
         absorption = voigt_absorption(
-            self.padded_wavelengths,
+            wavelengths,
             z_dla=z_dlas[0],
             nhi=nhis[0],
             num_lines=self.params.num_lines,
+            broadening=self.broadening, # the switch for instrumental broadening controlled by instance attr
         )
 
         # absorption corresponding to other DLAs in multiple DLA samples
         for j in range(1, k_dlas):
             absorption = absorption * voigt_absorption(
-                self.padded_wavelengths,
+                wavelengths,
                 z_dla=z_dlas[j],
                 nhi=nhis[j],
                 num_lines=self.params.num_lines,
+                broadening=self.broadening, # the switch for instrumental broadening controlled by instance attr
             )
 
         absorption = absorption[mask_ind]
@@ -470,6 +484,7 @@ class DLAGPMAT(DLAGP):
         dla_samples: DLASamplesMAT,
         min_z_separation: float = 3000.0,
         learned_file: str = "learned_qso_model_lyseries_variance_kim_dr9q_minus_concordance.mat",
+        broadening: bool = True,
     ):
         with h5py.File(learned_file, "r") as learned:
 
@@ -495,4 +510,5 @@ class DLAGPMAT(DLAGP):
             prev_tau_0=0.0023,
             prev_beta=3.65,
             min_z_separation=min_z_separation,
+            broadening=broadening,
         )
