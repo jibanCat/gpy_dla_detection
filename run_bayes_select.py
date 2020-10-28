@@ -289,6 +289,10 @@ def process_qso(
         f.create_dataset("p_no_dlas", data=p_no_dlas)
         f.create_dataset("model_posteriors", data=model_posteriors)
 
+        # also save zQSOs
+        f.create_dataset("z_qsos", data=np.array(z_qso_list))
+        # also save the filename list for reproducibility
+        f.create_dateset("qso_list", data=np.array(qso_list, h5py.string_dtype(encoding="utf-8")))
 
 def make_plots(
     dla_gp: DLAGPMAT,
