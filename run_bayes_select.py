@@ -236,10 +236,10 @@ def process_qso(
         # [make plots] plotting the inference results into
         # GP mean model + sample likelihood scatter plot
         if plot_figures:
-            title = "zQSO: {:.2g}; ".format(z_qso)
-            filename = "{}_{}".format(str(quasar_ind).zfill(6), filename.split(".")[0])
+            title = filename + "; zQSO: {:.2g};\n".format(z_qso) 
+            out_filename = "spec-{}".format(str(quasar_ind).zfill(6))
             make_plots(
-                dla_gp=dla_gp, bayes=bayes, filename=filename, sub_dir="images", title=title
+                dla_gp=dla_gp, bayes=bayes, filename=out_filename, sub_dir="images", title=title
             )
             plt.clf()
             plt.close()
@@ -289,6 +289,10 @@ def process_qso(
         f.create_dataset("p_no_dlas", data=p_no_dlas)
         f.create_dataset("model_posteriors", data=model_posteriors)
 
+        # also save zQSOs
+        f.create_dataset("z_qsos", data=np.array(z_qso_list))
+        # also save the filename list for reproducibility
+        f.create_dataset("qso_list", data=np.array(qso_list, h5py.string_dtype(encoding="utf-8")))
 
 def make_plots(
     dla_gp: DLAGPMAT,
@@ -300,9 +304,8 @@ def make_plots(
     """
     Make the GP mean model plot and the sample likelihood plots. 
     """
-    # [title] include filename in the title
-    title += "{}; P(DLA | D) = ".format(filename)
     # [title] include model posteriors
+    title += "P(DLA | D) = "
     title += ", ".join(map(lambda x: "{:.2g}".format(x), bayes.model_posteriors))
 
     if not os.path.exists(sub_dir):
@@ -331,9 +334,10 @@ if __name__ == "__main__":
     parser.add_argument("--qso_list", nargs="+")
     parser.add_argument("--z_qso_list", nargs="+", type=float)
     parser.add_argument("--max_dlas", type=int, default=4)
+    parser.add_argument("--plot_figures", type=int, default=0) # boolean: 0 for False, 1 for True
 
     args = parser.parse_args()
 
     process_qso(
-        args.qso_list, args.z_qso_list, read_spec.read_spec, max_dlas=args.max_dlas
+        args.qso_list, args.z_qso_list, read_spec.read_spec, max_dlas=args.max_dlas, plot_figures=args.plot_figures,
     )

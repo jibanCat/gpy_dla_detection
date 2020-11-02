@@ -122,7 +122,11 @@ def plot_sample_likelihoods(dla_gp: DLAGP, ax: Optional[plt.axes] = None):
         sample_z_dlas, dla_gp.dla_samples.log_nhi_samples, c=colours,
     )
 
-    ax.set_xlim(sample_z_dlas.min(), sample_z_dlas.max())
+    # [min max sample zDLAs] instead of using min max from sample_z_dlas
+    # using the zDLAs converted from wavelengths will better reflect the
+    # range of wavelengths range in the this_mu plot.
+    z_dlas = (dla_gp.this_wavelengths / dla_gp.params.lya_wavelength) - 1
+    ax.set_xlim(z_dlas.min(), z_dlas.max())
     ax.set_ylim(
         dla_gp.dla_samples.log_nhi_samples.min(),
         dla_gp.dla_samples.log_nhi_samples.max(),
