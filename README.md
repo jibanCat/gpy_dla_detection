@@ -84,6 +84,15 @@ The `Prior` class is also modifiable. This class is in charge of model priors fo
 
 Users can also write their own `DLASamples` class to reflect their own priors on DLA parameters, (zDLA, logNHI).
 
+Additional feature: quasar redshift estimation
+----
+
+Our GP method could also be used to estimate the quasar redshift. Details could be found in [Leah (2020)](https://arxiv.org/abs/2006.07343). Note that the original MATLAB code is in https://github.com/sbird/gp_qso_redshift. Here we only translated part of the codes without the learning functionality. To use the method, we need to download the trained GP model:
+
+- [learned_zqso_only_model_outdata_full_dr9q_minus_concordance_norm_1176-1256.mat](https://drive.google.com/file/d/1SqAU_BXwKUx8Zr38KTaA_nvuvbw-WPQM/view?usp=sharing)
+
+For how to use the redshift estimation method, please find the notebook in `notebooks/`.
+
 Python requirements
 -------------------
 
