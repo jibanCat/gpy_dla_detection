@@ -93,6 +93,8 @@ Our GP method could also be used to estimate the quasar redshift. Details could 
 
 For how to use the redshift estimation method, please find the notebook in `notebooks/`.
 
+- [Quasar Redshift Estimations.ipynb](https://nbviewer.jupyter.org/github/jibanCat/gpy_dla_detection/blob/zqso_notebooks/notebooks/Quasar%20Redshift%20Estimations.ipynb)
+
 Python requirements
 -------------------
 
