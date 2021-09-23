@@ -1,5 +1,9 @@
 """
 A test file for testing zestimation
+
+The learned file could be downloaded at
+[learned_zqso_only_model_outdata_full_dr9q_minus_concordance_norm_1176-1256.mat]
+(https://drive.google.com/file/d/1SqAU_BXwKUx8Zr38KTaA_nvuvbw-WPQM/view?usp=sharing)
 """
 import os
 import re
@@ -32,7 +36,7 @@ def test_zestimation(nspec: int):
     z_qso_gp = ZGPMAT(
         params,
         z_qso_samples,
-        learned_file="data/dr12q/processed/learned_zqso_only_model_outdata_normout_dr9q_minus_concordance_norm_1176-1256.mat",
+        learned_file="data/dr12q/processed/learned_zqso_only_model_outdata_full_dr9q_minus_concordance_norm_1176-1256.mat",
     )
 
     tic = time.time()
