@@ -294,7 +294,7 @@ class ZGPMAT(ZGP):
         self,
         params: ZParameters,
         z_qso_samples: ZSamples,
-        learned_file: str = "learned_zqso_only_model_outdata_normout_dr9q_minus_concordance_norm_1176-1256.mat",
+        learned_file: str = "learned_zqso_only_model_outdata_full_dr9q_minus_concordance_norm_1176-1256.mat",
     ):
         with h5py.File(learned_file, "r") as learned:
 
