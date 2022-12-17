@@ -101,10 +101,10 @@ class CIVGP(NullGP):
         # max_log_nhi = self.dla_samples.uniform_max_log_nhi
         # TODO: modulize properly
         min_log_nciv = 12.88
-        max_log_nciv = 14.5
+        max_log_nciv = 20
 
         min_sigma = 1e6 # cm/s
-        max_sigma = 12e6 # cm/s
+        max_sigma = 8e6 # cm/s
 
         # make the pdf function here
         # uniform component of column density prior
