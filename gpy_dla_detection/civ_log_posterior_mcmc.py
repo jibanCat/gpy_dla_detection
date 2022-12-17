@@ -8,38 +8,41 @@ import numpy as np
 import scipy
 from scipy.linalg import lapack
 
-from .dla_samples import DLASamplesMAT
-from .voigt import voigt_absorption
-
-# from .dla_gp import DLAGP
+from .voigt_civ import voigt_absorption
 
 
 def log_prior(
-    z_dla: float,
-    log_nhi: float,
-    min_z_dla: float,
-    max_z_dla: float,
-    min_log_nhi: float,
-    max_log_nhi: float,
+    z_civ: float,
+    log_nciv: float,
+    sigma: float,
+    min_z_civ: float,
+    max_z_civ: float,
+    min_log_nciv: float,
+    max_log_nciv: float,
+    min_sigma: float,
+    max_sigma: float,
     pdf,
 ) -> float:
     """
-    log prior probability for a single DLA intervening
+    log prior probability for a single CIV intervening
     with the quasar emission model.
 
-    Uniform prior for zDLA and a data-driven prior for logNHI. 
-    
-    p(theta|zQSO) = p(zDLA|zQSO) p(NHI)    
+    Current only uniform prior for zCIV.
+    TODO: Add Reza's data driven prior
     """
     cond = (
-        lambda z_dla, log_nhi: (z_dla < max_z_dla)
-        * (z_dla > min_z_dla)
-        * (log_nhi > min_log_nhi)
-        * (log_nhi < max_log_nhi)
+        lambda z_civ, log_nciv, sigma:
+          (z_civ < max_z_civ)
+        * (z_civ > min_z_civ)
+        * (log_nciv > min_log_nciv)
+        * (log_nciv < max_log_nciv)
+        * (sigma > min_sigma)
+        * (sigma < max_sigma)
     )
 
-    if cond(z_dla, log_nhi):
-        return np.log(pdf(log_nhi))
+    if cond(z_civ, log_nciv, sigma):
+        return np.log(pdf(log_nciv))
+
     return -np.inf
 
 
@@ -49,15 +52,16 @@ def log_posterior(
     y: np.ndarray,
     v: np.ndarray,
     z_qso: float,
-    min_z_dla: float,
-    max_z_dla: float,
-    min_log_nhi: float,
-    max_log_nhi: float,
+    min_z_civ: float,
+    max_z_civ: float,
+    min_log_nciv: float,
+    max_log_nciv: float,
+    min_sigma : float,
+    max_sigma : float,
     pdf,
     padded_wavelengths: np.ndarray,
     this_mu: np.ndarray,
     this_M: np.ndarray,
-    this_omega2: np.ndarray,
     pixel_mask: np.ndarray,
     ind_unmasked: np.ndarray,
     num_lines: np.ndarray,
@@ -65,30 +69,32 @@ def log_posterior(
     """
     get the posterior probability on a given pair of samples.
 
-    TODO: make this function to be multi-DLA.
+    :param theta: tuple, (z_civ, log_nciv, sigma).
+    :param civ_gp: the CIV model, input as an argument.
 
-    :param theta: tuple, (z_dla, log_nhi).
-    :param dla_gp: the DLA model, input as an argument. Maybe slow down the computation
-        but it is prettier.
-    
     :return log_posterior:
     """
-    z_dla, log_nhi = theta
+    z_civ, log_nciv, sigma = theta
 
-    lp = log_prior(z_dla, log_nhi, min_z_dla, max_z_dla, min_log_nhi, max_log_nhi, pdf,)
+    lp = log_prior(z_civ, log_nciv, sigma,
+        min_z_civ=min_z_civ, max_z_civ=max_z_civ,
+        min_log_nciv=min_log_nciv, max_log_nciv=max_log_nciv,
+        min_sigma=min_sigma, max_sigma=max_sigma,
+        pdf=pdf,
+    )
 
     if not np.isfinite(lp):
         return -np.inf
 
-    log_like = sample_log_likelihood_k_dlas(
-        np.array([z_dla]),
-        10**np.array([log_nhi]),
+    log_like = sample_log_likelihood_k_civs(
+        np.array([z_civ]),
+        10**np.array([log_nciv]),
+        np.array([sigma]),
         y=y,
         v=v,
         padded_wavelengths=padded_wavelengths,
         this_mu=this_mu,
         this_M=this_M,
-        this_omega2=this_omega2,
         pixel_mask=pixel_mask,
         ind_unmasked=ind_unmasked,
         num_lines=num_lines,
@@ -97,67 +103,67 @@ def log_posterior(
 
 
 # just need to get the likelihood function linearly independent
-def sample_log_likelihood_k_dlas(
-    z_dlas: np.ndarray,
-    nhis: np.ndarray,
+def sample_log_likelihood_k_civs(
+    z_civ: np.ndarray,
+    nciv: np.ndarray,
+    sigma: np.ndarray,
     y: np.ndarray,
     v: np.ndarray,
     padded_wavelengths: np.ndarray,
     this_mu: np.ndarray,
     this_M: np.ndarray,
-    this_omega2: np.ndarray,
     pixel_mask: np.ndarray,
     ind_unmasked: np.ndarray,
     num_lines: np.ndarray,
 ) -> float:
     """
-    Compute the log likelihood of k DLAs within a quasar spectrum:
-        p(y | λ, σ², M, ω, c₀, τ₀, β, τ_kim, β_kim, {z_dla, logNHI}_{i=1}^k)
+    Compute the log likelihood of CIV within a quasar spectrum:
+        p(y | λ, σ², M, ω, {z_civ, logNCIV})
 
-    :param z_dlas: an array of z_dlas you want to condition on
-    :param nhis: an array of nhis you want to condition on
+    :param z_civ: an array of z_civ you want to condition on
+    :param nciv: an array of nciv you want to condition on
     """
-    assert len(z_dlas) == len(nhis)
+    assert len(z_civ) == len(nciv)
 
-    dla_mu, dla_M, dla_omega2 = this_dla_gp(
-        z_dlas=z_dlas,
-        nhis=nhis,
+    civ_mu, civ_M = this_civ_gp(
+        z_civ=z_civ,
+        nciv=nciv,
+        sigma=sigma,
         padded_wavelengths=padded_wavelengths,
         this_mu=this_mu,
         this_M=this_M,
-        this_omega2=this_omega2,
         pixel_mask=pixel_mask,
         ind_unmasked=ind_unmasked,
         num_lines=num_lines,
     )
 
-    sample_log_likelihood = log_mvnpdf_low_rank(y, dla_mu, dla_M, dla_omega2 + v)
+    sample_log_likelihood = log_mvnpdf_low_rank(y, civ_mu, civ_M, v)
 
     return sample_log_likelihood
 
 
-def this_dla_gp(
-    z_dlas: np.ndarray,
-    nhis: np.ndarray,
+def this_civ_gp(
+    z_civ: np.ndarray,
+    nciv: np.ndarray,
+    sigma: np.ndarray,
     padded_wavelengths: np.ndarray,
     this_mu: np.ndarray,
     this_M: np.ndarray,
-    this_omega2: np.ndarray,
     pixel_mask: np.ndarray,
     ind_unmasked: np.ndarray,
     num_lines: int,
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+) -> Tuple[np.ndarray, np.ndarray]:
     """
-    Compute the DLA GP model with k intervening DLA profiles onto
+    Compute the CIV GP model with k intervening civ profiles onto
     the mean and covariance.
 
-    :param z_dlas: (k_dlas, ), the redshifts of intervening DLAs
-    :param nhis: (k_dlas, ), the column densities of intervening DLAs
+    :param z_civ: (k_civs, ), the redshifts of intervening CIVs
+    :param nciv: (k_civs, ), the column densities of intervening CIVs
+    :param sigma: (k_civs, )
 
-    :return: (dla_mu, dla_M, dla_omega2)
-    :return dla_mu: (n_points, ), the GP mean model with k_dlas DLAs intervening.
-    :return dla_M: (n_points, k), the GP covariance with k_dlas DLAs intervening.
-    :return dla_omega2: (n_points), the absorption noise with k_dlas DLAs intervening.S
+    :return: (civ_mu, civ_M)
+    :return civ_mu: (n_points, ), the GP mean model
+    :return civ_M: (n_points, k), the GP covariance
 
     Note: the number of Voigt profile lines is controlled by self.params : Parameters,
     I prefer to not to allow users to change from the function arguments since that
@@ -168,33 +174,32 @@ def this_dla_gp(
     This would happen when a user want to know whether the result would converge with increasing
     number of lines.
     """
-    assert len(z_dlas) == len(nhis)
+    assert len(z_civ) == len(nciv)
 
-    k_dlas = len(z_dlas)
+    k_civs = len(z_civ)
 
     # to retain only unmasked pixels from computed absorption profile
     mask_ind = ~pixel_mask[ind_unmasked]
 
     # absorption corresponding to this sample
     absorption = voigt_absorption(
-        padded_wavelengths, z_dla=z_dlas[0], nhi=nhis[0], num_lines=num_lines,
+        padded_wavelengths, z_civ=z_civ[0], nciv=nciv[0], sigma=sigma[0], num_lines=num_lines,
     )
 
-    # absorption corresponding to other DLAs in multiple DLA samples
-    for j in range(1, k_dlas):
+    # absorption corresponding to other CIVs in multiple CIV samples
+    for j in range(1, k_civs):
         absorption = absorption * voigt_absorption(
-            padded_wavelengths, z_dla=z_dlas[j], nhi=nhis[j], num_lines=num_lines,
+            padded_wavelengths, z_civ=z_civ[j], nciv=nciv[j], sigma=sigma[j], num_lines=num_lines,
         )
 
     absorption = absorption[mask_ind]
 
     assert len(absorption) == len(this_mu)
 
-    dla_mu = this_mu * absorption
-    dla_M = this_M * absorption[:, None]
-    dla_omega2 = this_omega2 * absorption ** 2
+    civ_mu = this_mu * absorption
+    civ_M = this_M * absorption[:, None]
 
-    return dla_mu, dla_M, dla_omega2
+    return civ_mu, civ_M
 
 
 def log_mvnpdf_low_rank(

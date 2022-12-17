@@ -13,11 +13,11 @@ from scipy import interpolate
 from .civ_set_parameter import CIVParameters as Parameters # use Zesimation model for now until Reza gives me the model
 from .model_priors import PriorCatalog
 from .null_gp import NullGP
-from .voigt import voigt_absorption
+from .voigt_civ import voigt_absorption
 
 # this could be replaced to DLASamples in the future;
 # I import this is for the convenient of my autocomplete
-from .dla_samples import DLASamplesMAT
+# from .dla_samples import DLASamplesMAT
 
 # the mcmc log posterior function
 import emcee
@@ -81,7 +81,7 @@ class CIVGP(NullGP):
     def run_mcmc(
         self,
         nwalkers: int,
-        kth_dla: int = 1,
+        kth_civ: int = 1,
         nsamples: int = 5000,
         pos: Optional[np.ndarray] = None,
         skip_initial_state_check:bool=True,
@@ -103,8 +103,8 @@ class CIVGP(NullGP):
         min_log_nciv = 12.88
         max_log_nciv = 14.5
 
-        min_sigma = 3e6 # cm/s
-        max_sigma = 7e6 # cm/s
+        min_sigma = 1e6 # cm/s
+        max_sigma = 12e6 # cm/s
 
         # make the pdf function here
         # uniform component of column density prior
@@ -123,7 +123,7 @@ class CIVGP(NullGP):
 
         sampler = emcee.EnsembleSampler(
             nwalkers,
-            kth_dla * 2,
+            kth_civ * 3,
             log_posterior,
             args=(
                 self.this_wavelengths,
@@ -170,7 +170,7 @@ class CIVGP(NullGP):
         """
         Build and interpolate the GP model onto the observed data.
         
-        p(y | λ, zqso, v, ω, M_nodla) = N(y; μ .* a_lya, A_lya (K + Ω) A_lya + V)
+        p(y | λ, zqso, v, ω, M_nociv) = N(y; μ, K + V)
         
         :param x: this_rest_wavelengths
         :param y: this_flux
@@ -189,6 +189,62 @@ class CIVGP(NullGP):
         # assign to instance attrs
         self.this_mu = this_mu
         self.this_M = this_M
+
+
+    def this_civ_gp(
+        self,
+        z_civ: np.ndarray,
+        nciv: np.ndarray,
+        sigma: np.ndarray,
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Compute the CIV GP model with k intervening civ profiles onto
+        the mean and covariance.
+
+        :param z_civ: (k_civs, ), the redshifts of intervening CIVs
+        :param nciv: (k_civs, ), the column densities of intervening CIVs
+        :param sigma: (k_civs, )
+
+        :return: (civ_mu, civ_M)
+        :return civ_mu: (n_points, ), the GP mean model
+        :return civ_M: (n_points, k), the GP covariance
+
+        Note: the number of Voigt profile lines is controlled by self.params : Parameters,
+        I prefer to not to allow users to change from the function arguments since that
+        would easily cause inconsistent within a pipeline. But if a user want to change
+        the num_lines, they can change via changing the instance attr of the self.params:Parameters
+        like:
+            self.params.num_lines = <the number of lines preferred to be used>
+        This would happen when a user want to know whether the result would converge with increasing
+        number of lines.
+        """
+        assert len(z_civ) == len(nciv)
+
+        k_civs = len(z_civ)
+
+        # to retain only unmasked pixels from computed absorption profile
+        mask_ind = ~self.pixel_mask[self.ind_unmasked]
+
+        # absorption corresponding to this sample
+        absorption = voigt_absorption(
+            self.padded_wavelengths, z_civ=z_civ[0], nciv=nciv[0], sigma=sigma[0], num_lines=self.params.num_lines,
+        )
+
+        # absorption corresponding to other CIVs in multiple CIV samples
+        for j in range(1, k_civs):
+            absorption = absorption * voigt_absorption(
+                self.padded_wavelengths, z_civ=z_civ[j], nciv=nciv[j], sigma=sigma[j], num_lines=self.params.num_lines,
+            )
+
+        absorption = absorption[mask_ind]
+
+        assert len(absorption) == len(self.this_mu)
+
+        civ_mu = self.this_mu * absorption
+        civ_M = self.this_M * absorption[:, None]
+
+        return civ_mu, civ_M
+
 
 class CIVGPMAT(CIVGP):
     """

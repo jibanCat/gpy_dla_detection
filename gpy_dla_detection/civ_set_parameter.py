@@ -112,7 +112,6 @@ class CIVParameters(Parameters):
         return np.max(
             [
                 np.min(wavelengths[ind]) / self.civ_1548_wavelength - 1,
-                self.observed_wavelengths(1310, z_qso) / self.civ_1548_wavelength - 1
-                + self.min_z_cut,
+                self.observed_wavelengths(1310, z_qso) / self.civ_1548_wavelength - 1,
             ]
         )
