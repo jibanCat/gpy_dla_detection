@@ -10,14 +10,10 @@ import h5py
 
 from scipy import interpolate
 
-from .civ_set_parameter import CIVParameters as Parameters # use Zesimation model for now until Reza gives me the model
+from .civ_set_parameter import CIVParameters as Parameters
 from .model_priors import PriorCatalog
 from .null_gp import NullGP
 from .voigt_civ import voigt_absorption
-
-# this could be replaced to DLASamples in the future;
-# I import this is for the convenient of my autocomplete
-# from .dla_samples import DLASamplesMAT
 
 # the mcmc log posterior function
 import emcee
@@ -35,7 +31,7 @@ class CIVGP(NullGP):
     Since the integration is not tractable, so we use QMC to approximate
     the model evidence. 
 
-    How many QMC samples will be defined in Parameters and DLASamples.
+    How many QMC samples will be defined in Parameters and CIVSamples.
 
     :param rest_wavelengths: λ, the range of λ you model your GP on QSO emission
     :param mu: mu, the mean model of the GP.
@@ -50,7 +46,7 @@ class CIVGP(NullGP):
         self,
         params: Parameters,
         # prior: PriorCatalog,
-        # dla_samples: DLASamplesMAT,
+        # civ_samples: CIVSamplesMAT,
         rest_wavelengths: np.ndarray,
         mu: np.ndarray,
         M: np.ndarray,
@@ -87,12 +83,12 @@ class CIVGP(NullGP):
         skip_initial_state_check:bool=True,
     ) -> emcee.EnsembleSampler:
         """
-        An MCMC implementation for marginalizing log likelihood at kth DLA model.
+        An MCMC implementation for marginalizing log likelihood at kth CIV model.
 
         MCMC should give a more accurate parameter estimation than maximum a
         posteriori on the QMC samples.
         """
-        # get the prior range for the zDLA
+        # get the prior range for the zCIV
         min_z_civ = self.params.min_z_civ(self.this_wavelengths, self.z_qso)
         max_z_civ = self.params.max_z_civ(self.this_wavelengths, self.z_qso)
 
@@ -110,12 +106,7 @@ class CIVGP(NullGP):
         # uniform component of column density prior
         u = stats.uniform(loc=min_log_nciv,
             scale=max_log_nciv - min_log_nciv)
-
-        # directly use the fitted poly values in the Garnett (2017)
-        # unnormalized_pdf = lambda nhi: (np.exp(
-        #     -1.2695 * nhi**2 + 50.863 * nhi -509.33
-        # ))
-        # Z = quad(unnormalized_pdf, self.dla_samples.fit_min_log_nhi, 25.0)[0] # hard-coded 25.0
+        # TODO: parameter prior not Implement. Assume uniform for now.
 
         # create the PDF of the mixture between the unifrom distribution and
         # the distribution fit to the data
@@ -254,8 +245,9 @@ class CIVGPMAT(CIVGP):
     def __init__(
         self,
         params: Parameters,
+        # TODO: QMC Not Implement
         # prior: PriorCatalog,
-        # dla_samples: DLASamplesMAT,
+        # civ_samples: CIVSamplesMAT,
         min_z_separation: float = 3000.0,
         learned_file: str = "data/dr7q/learned_model-C13_full.mat",
         broadening: bool = True,
