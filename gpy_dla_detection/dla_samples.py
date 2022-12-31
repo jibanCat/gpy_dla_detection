@@ -3,6 +3,8 @@ A class to handle the QMC samples of the DLA parameters:
 theta = (z_dla, logNHI) = (redshift of DLA, column density of DLA)
 """
 import numpy as np
+import scipy.stats as stats
+from scipy.integrate import quad
 import h5py
 from .set_parameters import Parameters
 from .model_priors import PriorCatalog
@@ -71,6 +73,9 @@ class DLASamplesMAT(DLASamples):
         self._log_nhi_samples = dla_samples["log_nhi_samples"][:, 0]
         self._nhi_samples = dla_samples["nhi_samples"][:, 0]
 
+        self.uniform_min_log_nhi = dla_samples["uniform_min_log_nhi"][0, 0]
+        self.uniform_max_log_nhi = dla_samples["uniform_max_log_nhi"][0, 0]
+
     @property
     def offset_samples(self) -> np.ndarray:
         return self._offset_samples
@@ -94,3 +99,30 @@ class DLASamplesMAT(DLASamples):
         )
 
         return sample_z_dlas
+
+    def _pdf(self):
+        """
+        Make the normalized pdf and store it in class.
+        """
+        # uniform component of column density prior
+        u = stats.uniform(loc=self.uniform_min_log_nhi,
+            scale=self.uniform_max_log_nhi - self.uniform_min_log_nhi)
+
+        # directly use the fitted poly values in the Garnett (2017)
+        unnormalized_pdf = lambda nhi: (np.exp(
+            -1.2695 * nhi**2 + 50.863 * nhi -509.33
+        ))
+        Z = quad(unnormalized_pdf, self.fit_min_log_nhi, 25.0) # hard-coded 25.0
+
+        # create the PDF of the mixture between the unifrom distribution and
+        # the distribution fit to the data
+        normalized_pdf = lambda nhi: self.alpha  * (unnormalized_pdf(nhi) / Z
+            ) + (1 - self.alpha) * (u.pdf(nhi))
+        
+        self.normalized_pdf = normalized_pdf
+
+    def pdf(self, log_nhi: float) -> float:
+        """
+        The logNHI pdf used in Garnett (2017) paper.
+        """
+        return self.normalized_pdf(log_nhi)
