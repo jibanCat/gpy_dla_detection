@@ -112,7 +112,7 @@ class DLASamplesMAT(DLASamples):
         unnormalized_pdf = lambda nhi: (np.exp(
             -1.2695 * nhi**2 + 50.863 * nhi -509.33
         ))
-        Z = quad(unnormalized_pdf, self.fit_min_log_nhi, 25.0) # hard-coded 25.0
+        Z = quad(unnormalized_pdf, self.fit_min_log_nhi, 25.0)[0] # hard-coded 25.0
 
         # create the PDF of the mixture between the unifrom distribution and
         # the distribution fit to the data
