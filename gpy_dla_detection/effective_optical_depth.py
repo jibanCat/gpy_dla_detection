@@ -74,8 +74,6 @@ def effective_optical_depth(
         # here is different from multi-dla processing script
         # I choose to use zero instead or nan to indicate
         # values outside of the Lyman forest
-        if skip_lya_indicator and (i == 0):
-            continue
         indicator = this_lyseries_zs[:, i] <= z_qso
         total_optical_depth[:, i] = total_optical_depth[:, i] * indicator
 
