@@ -76,6 +76,9 @@ class DLASamplesMAT(DLASamples):
         self.uniform_min_log_nhi = dla_samples["uniform_min_log_nhi"][0, 0]
         self.uniform_max_log_nhi = dla_samples["uniform_max_log_nhi"][0, 0]
 
+        # build the pdf function
+        self._pdf()
+
     @property
     def offset_samples(self) -> np.ndarray:
         return self._offset_samples
