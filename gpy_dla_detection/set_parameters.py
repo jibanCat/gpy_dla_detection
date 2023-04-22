@@ -133,8 +133,10 @@ class Parameters:
             rest_wavelengths <= self.max_lambda
         )
         return np.min(
-            (np.max(wavelengths[ind]) / self.lya_wavelength - 1) - self.max_z_cut,
-            z_qso                                                - self.max_z_cut
+            [
+                (np.max(wavelengths[ind]) / self.lya_wavelength - 1) - self.max_z_cut,
+                z_qso                                                - self.max_z_cut
+            ]
         )
 
     def min_z_dla(self, wavelengths: np.ndarray, z_qso: float) -> float:
