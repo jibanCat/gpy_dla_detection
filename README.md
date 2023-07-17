@@ -25,7 +25,7 @@ however, you may feel free to modify these choices as you see fit.
 Downloading the external DLA catalogues and the learned model
 ----------------------------------------
 
-First we download the raw catalog data:
+First we download the raw catalog data (requires both `wget` and `gawk`):
 
     # in shell
     cd data/scripts
