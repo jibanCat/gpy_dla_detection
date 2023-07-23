@@ -34,7 +34,8 @@ First we download the raw catalog data (requires both `wget` and `gawk`):
 The learned model of Ho-Bird-Garnett (2020) is publicly available here:
 http://tiny.cc/multidla_catalog_gp_dr12q
 The required `.mat` files for this Python repo are:
-- The GP model: [learned_qso_model_lyseries_variance_kim_dr9q_minus_concordance.mat](https://drive.google.com/file/d/16n7cDNyXmwoHOw9jFiF5em1z8Q4hQkED/view?usp=sharing) 
+- The GP model on spectra without DR9 concordance DLAs (2003.11036): [learned_qso_model_lyseries_variance_kim_dr9q_minus_concordance.mat](https://drive.google.com/file/d/16n7cDNyXmwoHOw9jFiF5em1z8Q4hQkED/view?usp=sharing)
+- The GP model trained on spectra without Ho DR12 DLAs (2103.10964): [learned_qso_model_lyseries_variance_wmu_boss_dr16q_minus_dr12q_gp_851-1421.mat](https://drive.google.com/file/d/1R4KvOKzQe17SheEYY8Mc7ia6OErbTL6x/view?usp=sharing)
 - DLA samples for Quasi-Monte Carlo integration: [dla_samples_a03.mat](https://drive.google.com/file/d/1pE5nFkMvXPmSJimr6uXBRUWNYZhp9h00/view?usp=sharing)
 - SubDLA samples for Quasi-Monte Carlo integration: [subdla_samples.mat](https://drive.google.com/file/d/1UFdsFAiYNU8QdGph4UY3B86W-ge-112n/view?usp=sharing)
 - The SDSS DR12 QSO catalogue, including the `filter_flags` we used to train the GP model: [catalog.mat](https://drive.google.com/file/d/1-DE6NdFhaEcI0bk-l-GiN2DzxoWoLW-L/view?usp=sharing)
