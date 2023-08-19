@@ -1,6 +1,9 @@
 DLA detection pipleine for BOSS quasar spectra, **in Python**
 =============================================================
 
+![rainbow_dlas](https://github.com/jibanCat/gpy_dla_detection/assets/23435784/b72159b0-9b24-4be7-adeb-772f6598e52b)
+
+
 This code repository contains code to completely reproduce the DLA
 catalog reported in
 
