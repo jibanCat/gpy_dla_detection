@@ -15,14 +15,14 @@ class PriorCatalog:
     Roman's MATLAB code. It holds the catalog of prior used for
     training, so it will give the number of DLAs conditioned on
     a given z_QSO:
-    
+
     % DLA existence prior
     less_ind = (prior.z_qsos < (z_qso + prior_z_qso_increase));
 
     then the prior is calculated via P(DLA|zQSO) = M / N,
     M =  this_num_dlas    = nnz(prior.dla_ind(less_ind));
     N =  this_num_quasars = nnz(less_ind);
-    
+
     Note: default set to dr9q_concordance
 
     :param param: default parameters set in the set_parameters.
@@ -53,11 +53,11 @@ class PriorCatalog:
         # load the mat file
         with h5py.File(catalog_name, "r") as catalog:
             # prepare the zQSOs and thingIDs
-            self.in_dr9 = catalog["in_dr9"][0, :].astype(np.bool)
-            self.in_dr10 = catalog["in_dr10"][0, :].astype(np.bool)
+            self.in_dr9 = catalog["in_dr9"][0, :].astype(np.bool_)
+            self.in_dr10 = catalog["in_dr10"][0, :].astype(np.bool_)
             self.z_qsos = catalog["z_qsos"][0, :]
             self.filter_flags = catalog["filter_flags"][0, :]
-            self.thing_ids = catalog["thing_ids"][0, :].astype(np.int)
+            self.thing_ids = catalog["thing_ids"][0, :].astype(np.int64)
 
         # load the DLA catalog from separated files
         if dla_catalog_name == "dr9q_concordance":
@@ -104,11 +104,11 @@ class PriorCatalog:
         dla_catalog = np.loadtxt(dla_concordance)
         los_catalog = np.loadtxt(los_concordance)
 
-        thing_ids_dla = dla_catalog[:, 0].astype(np.int)
+        thing_ids_dla = dla_catalog[:, 0].astype(np.int64)
         z_dlas = dla_catalog[:, 1]
         log_nhis = dla_catalog[:, 2]
 
-        thing_ids_los = los_catalog.astype(np.int)
+        thing_ids_los = los_catalog.astype(np.int64)
         return thing_ids_los, thing_ids_dla, z_dlas, log_nhis
 
     def load_catalog(self, los_catalog: str, dla_catalog: str) -> None:
@@ -117,7 +117,7 @@ class PriorCatalog:
     def filter_z_dlas(self, dla_ind: np.ndarray, z_dlas: np.ndarray) -> np.ndarray:
         """
         filter out DLAs from prior catalog corresponding to region of spectrum below
-        Ly∞ QSO rest 
+        Ly∞ QSO rest
         """
         num_dlas = np.sum(dla_ind)
 
@@ -146,7 +146,7 @@ class PriorCatalog:
             N = num_quasars
 
         :param z_qso: the quasar redshift to be conditioned on.
-        :return: (this_num_dlas, this_num_quasars) 
+        :return: (this_num_dlas, this_num_quasars)
         """
         # use QSOs with z < (z_QSO + x) for prior
         less_ind = self.z_qsos < (z_qso + self.params.prior_z_qso_increase)

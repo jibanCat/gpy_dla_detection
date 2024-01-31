@@ -228,21 +228,21 @@ def Gaussian(x: np.ndarray, sigma: float) -> np.ndarray:
     """
     G(x; sigma) = 1 / sqrt(2 pi sigma^2) * exp( - x^2 / 2 sigma^2 )
     """
-    return 1 / np.sqrt(2 * np.pi * sigma ** 2) * np.exp(-(x ** 2) / 2 / sigma ** 2)
+    return 1 / np.sqrt(2 * np.pi * sigma**2) * np.exp(-(x**2) / 2 / sigma**2)
 
 
 def Lorentzian(x: np.ndarray, gamma: float) -> np.ndarray:
     """
     L(x; gamma) = (gamma / pi ) / (x**2 + gamma**2)
     """
-    return gamma / np.pi / (x ** 2 + gamma ** 2)
+    return gamma / np.pi / (x**2 + gamma**2)
 
 
 def Voigt(x: np.ndarray, sigma: float, gamma: float) -> np.ndarray:
     """
     Vogit line profile
 
-    V(x; sigma, gamma) = Re[ w(z) ] / sqrt( 2 pi sigma^2 ) 
+    V(x; sigma, gamma) = Re[ w(z) ] / sqrt( 2 pi sigma^2 )
     """
     z = (x + 1j * gamma) / (np.sqrt(2) * sigma)
     return np.real(wofz(z)) / (np.sqrt(2 * np.pi) * sigma)
@@ -265,12 +265,12 @@ def voigt_absorption(
     z_dla (float) : the redshift of this absorber   (dimensionless)
 
     raw_profile =
-        exp( nhi * ( - leading_constants[j] * Voigt(velocity, sigma, gammas[j] ) )  ) 
+        exp( nhi * ( - leading_constants[j] * Voigt(velocity, sigma, gammas[j] ) )  )
 
     for the relative velocity:
-    velocity = 
+    velocity =
         c * ( wavelengths * / ( transition_wavelengths[j] * (1 + z) ) - 1 )
-    
+
     for the leading constants:
     leading_constants[i] =
        M_PI * e * e * oscillator_strengths[i] * transition_wavelengths[i] / (m_e * c)
@@ -281,7 +281,7 @@ def voigt_absorption(
         for (j = i, k = 0; j <= i + 2 * width; j++, k++)
         profile[i] += raw_profile[j] * instrument_profile[k];
 
-    Note: 
+    Note:
     ----
     unit conversion from cm to A is 10^-8
     """
@@ -306,7 +306,7 @@ def voigt_absorption(
 
         total[l, :] = -leading_constants[l] * Voigt(velocity, sigma, gammas[l])
 
-    raw_profile[:] = np.exp(np.float(nhi) * np.nansum(total, axis=0))
+    raw_profile[:] = np.exp(np.float64(nhi) * np.nansum(total, axis=0))
 
     if broadening:
         # num_points = len(profile)
