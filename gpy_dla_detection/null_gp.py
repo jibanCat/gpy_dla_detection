@@ -16,7 +16,7 @@ class NullGP:
     """
     Null GP model for QSO emission:
         p(y | λ, σ², M, ω, c₀, τ₀, β, τ_kim, β_kim)
-    
+
     :param rest_wavelengths: λ, the range of λ you model your GP on QSO emission
     :param mu: mu, the mean model of the GP.
     :param M: M, the low rank decomposition of the covariance kernel: K = MM^T.
@@ -27,9 +27,9 @@ class NullGP:
         effective_optical_depth := ∑ τ₀ fi1 λi1 / ( f21 λ21 ) * ( 1 + z_i1 )^β
     :param log_beta: log β, the exponent of the effective optical depth in the absorption noise.
     :param prev_tau_0: τ_kim, the scale factor of effective optical depth used in mean-flux suppression.
-    :param prev_beta: β_kim, the exponent of the effective optical depth used in mean-flux suppression. 
-    
-    Note: we assume we load the learned GP from a .mat file, but this could be deprecate in the future  
+    :param prev_beta: β_kim, the exponent of the effective optical depth used in mean-flux suppression.
+
+    Note: we assume we load the learned GP from a .mat file, but this could be deprecate in the future
     """
 
     def __init__(
@@ -130,7 +130,10 @@ class NullGP:
             )
             this_median = np.nanmedian(self.y[ind])
             self.y = self.y / this_median
-            self.v = self.v / this_median ** 2
+            self.v = self.v / this_median**2
+
+            # save the median for later use
+            self.normalization_median = this_median
 
         # apply pixel mask and filter spectrum within modelling range
         ind = (self.x >= self.params.min_lambda) & (self.x <= self.params.max_lambda)
@@ -178,9 +181,9 @@ class NullGP:
     ) -> None:
         """
         Build and interpolate the GP model onto the observed data.
-        
+
         p(y | λ, zqso, v, ω, M_nodla) = N(y; μ .* a_lya, A_lya (K + Ω) A_lya + V)
-        
+
         :param x: this_rest_wavelengths
         :param y: this_flux
         :param wavelengths: observed wavelengths, put this arg is just for making the
@@ -226,12 +229,12 @@ class NullGP:
         )
 
         # this is the omega included the Lyseries
-        this_omega2 = this_omega2 * this_scaling_factor ** 2
+        this_omega2 = this_omega2 * this_scaling_factor**2
 
         # re-adjust (K + Ω) to the level of μ .* exp( -optical_depth ) = μ .* a_lya
         # now the null model likelihood is:
         # p(y | λ, zqso, v, ω, M_nodla) = N(y; μ .* a_lya, A_lya (K + Ω) A_lya + V)
-        this_omega2 = this_omega2 * lya_absorption ** 2
+        this_omega2 = this_omega2 * lya_absorption**2
 
         # assign to instance attrs
         self.this_mu = this_mu
@@ -291,9 +294,9 @@ class NullGP:
     def log_model_evidence(self) -> float:
         """
         Compute the log model evidence with the learned model.
-        
+
         Note: assume the model has already interpolated onto the observed data,
-        and data got loaded into the GP instance.        
+        and data got loaded into the GP instance.
         """
         log_likelihood_no_dla = self.log_mvnpdf_low_rank(
             self.y, self.this_mu, self.this_M, self.this_omega2 + self.v
@@ -303,13 +306,17 @@ class NullGP:
 
     @staticmethod
     def log_mvnpdf_low_rank(
-        y: np.ndarray, mu: np.ndarray, M: np.ndarray, d: np.ndarray, scipy_lapack: bool = True
+        y: np.ndarray,
+        mu: np.ndarray,
+        M: np.ndarray,
+        d: np.ndarray,
+        scipy_lapack: bool = True,
     ) -> float:
         """
         efficiently computes
-        
+
            log N(y; mu, MM' + diag(d))
-        
+
         :param y: this_flux, (n_points, )
         :param mu: this_mu, the mean vector of GP, (n_points, )
         :param M: this_M, the low rank decomposition of covariance matrix, (n_points, k)
@@ -356,21 +363,21 @@ class NullGP:
         """
         get the model prior of null model, this is defined to be:
             P(no DLA | zQSO) = 1 - P(DLA | zQSO) - P(subDLA | zQSO),
-        
+
         where
 
             P(DLA | zQSO) = M / N
-        
+
         M : number of DLAs below this zQSO
         N : number of quasars below this zQSO
 
         without P(subDLA | zQSO),
             P(DLA | zQSO) = 1 - M / N
-        
+
         we return the null model prior without subDLAs prior here (
         as defined in the Garnett (2017) code), but remember to substract
         the subDLA prior if you want to take into account subDLA prior as
-        in Ho, Bird, Garnett (2020). 
+        in Ho, Bird, Garnett (2020).
         """
         if not without_subDLAs:
             NotImplementedError
@@ -392,7 +399,6 @@ class NullGPMAT(NullGP):
         learned_file: str = "learned_qso_model_lyseries_variance_kim_dr9q_minus_concordance.mat",
     ):
         with h5py.File(learned_file, "r") as learned:
-
             rest_wavelengths = learned["rest_wavelengths"][:, 0]
             mu = learned["mu"][:, 0]
             M = learned["M"][()].T
