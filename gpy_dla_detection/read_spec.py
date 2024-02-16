@@ -7,6 +7,7 @@ we can add more read_spec functions for different
 datasets.
 """
 from typing import Tuple
+import os
 
 from urllib import request
 import numpy as np
@@ -27,7 +28,7 @@ def read_spec(filename: str) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.nda
 
     Returns:
     ----
-    wavelengths     : observed wavelengths 
+    wavelengths     : observed wavelengths
     flux            : coadded calibrated flux 10**-17 erg s**-1 cm**-2 A**-1
     noise_variance  : noise variance per pixel
     pixel_mask      : if 1/noise_variance = 0 and BRIGHTSKY
@@ -53,7 +54,7 @@ def read_spec(filename: str) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.nda
         # `and` mask
         and_mask = data["and_mask"]
 
-        wavelengths = 10 ** log_wavelengths
+        wavelengths = 10**log_wavelengths
 
         # handle divide by zero
         ind = inverse_noise_variance == 0
@@ -69,7 +70,10 @@ def read_spec(filename: str) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.nda
 
     return wavelengths, flux, noise_variance, pixel_mask
 
-def read_spec_dr14q(filename: str) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+
+def read_spec_dr14q(
+    filename: str,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """
     loads data from SDSS DR14Q coadded "speclite" FITS file;
 
@@ -99,7 +103,7 @@ def read_spec_dr14q(filename: str) -> Tuple[np.ndarray, np.ndarray, np.ndarray, 
         # `and` mask
         and_mask = data["and_mask"]
 
-        wavelengths = 10 ** log_wavelengths
+        wavelengths = 10**log_wavelengths
 
         # handle divide by zero
         ind = inverse_noise_variance == 0
@@ -116,11 +120,21 @@ def read_spec_dr14q(filename: str) -> Tuple[np.ndarray, np.ndarray, np.ndarray, 
     return wavelengths, flux, noise_variance, pixel_mask
 
 
-def retrieve_raw_spec(plate: int, mjd: int, fiber_id: int, release: str = "dr12q"):
+def retrieve_raw_spec(
+    plate: int,
+    mjd: int,
+    fiber_id: int,
+    release: str = "dr12q",
+    base_dir=os.path.join("data", "raw_spectra"),
+):
     """
     utility function to download a raw spec from SDSS
     """
-    filename = file_loader(plate, mjd, fiber_id)
+    # create the base directory if it does not exist
+    if not os.path.exists(base_dir):
+        os.makedirs(base_dir, exist_ok=True)
+
+    filename = os.path.join(base_dir, file_loader(plate, mjd, fiber_id))
 
     if release == "dr12q":
         # greedy list all plates at v_5_7_2
@@ -171,7 +185,6 @@ def retrieve_raw_spec(plate: int, mjd: int, fiber_id: int, release: str = "dr12q
         )
     else:
         raise Exception("must choose between dr12q or dr14q!")
-
 
     print("[Info] retrieving {} ...".format(url), end=" ")
     request.urlretrieve(url, filename)

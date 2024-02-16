@@ -858,10 +858,13 @@ def main(
         f.write(
             "Classification Outcome: {}\n".format(loader.classification_outcome[nspec])
         )
-        f.write("Note:  (1: quasar with LLS; 2: quasar without LLS; 4: non quasar)")
+        f.write("Note:  (1: quasar with LLS; 2: quasar without LLS; 4: non quasar)\n")
         f.write("LLS Redshift: {}\n".format(loader.LLS_redshift[nspec]))
 
     # If we haven't downloaded the file, this cell will help you download the file from SDSS database
+    base_rawspectra_dir = os.path.join("data", "raw_spectra")
+    filename = os.path.join(base_rawspectra_dir, filename)
+
     if not os.path.exists(filename):
         # This line gets the plate, mjd, and fiber_id from the given filename
         # Note: re is the regex.
@@ -873,11 +876,23 @@ def main(
         # If the file doesn't exist, try to download the file from dr12q
         try:
             # Download the file using the given plate, mjd, and fiber_id
-            retrieve_raw_spec(int(plate), int(mjd), int(fiber_id), release="dr14q")
+            retrieve_raw_spec(
+                int(plate),
+                int(mjd),
+                int(fiber_id),
+                release="dr14q",
+                base_dir=base_rawspectra_dir,
+            )
         except Exception as e:
             print("Error: ", e)
             print("Downloading from dr14q ...")
-            retrieve_raw_spec(int(plate), int(mjd), int(fiber_id), release="dr12q")
+            retrieve_raw_spec(
+                int(plate),
+                int(mjd),
+                int(fiber_id),
+                release="dr12q",
+                base_dir=base_rawspectra_dir,
+            )
 
     # make sure the file exists
     assert os.path.exists(filename) == True
