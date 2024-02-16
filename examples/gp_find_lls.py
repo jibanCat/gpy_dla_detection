@@ -555,11 +555,17 @@ def plot_sample_predictions(
     # 1. Real spectrum space
     # N * (1~k models) * (1~k MAP dlas)
     MAP_z_dla, MAP_log_nhi = lya_gp.maximum_a_posteriori()
-    # make them to be 1-D array
-    map_z_dlas = MAP_z_dla[nth_lya - 1, :nth_lya]
-    map_log_nhis = MAP_log_nhi[nth_lya - 1, :nth_lya]
-    # feed in MAP values and get the absorption profile given (z_dlas, nhis)
-    lya_mu, lya_M, lya_omega2 = lya_gp.this_dla_gp(map_z_dlas, 10**map_log_nhis)
+    if nth_lya >= 1:
+        # make them to be 1-D array
+        map_z_dlas = MAP_z_dla[nth_lya - 1, :nth_lya]
+        map_log_nhis = MAP_log_nhi[nth_lya - 1, :nth_lya]
+        # feed in MAP values and get the absorption profile given (z_dlas, nhis)
+        lya_mu, lya_M, lya_omega2 = lya_gp.this_dla_gp(map_z_dlas, 10**map_log_nhis)
+    else:
+        lya_mu = gp.this_mu
+        # place holder for the maps
+        map_z_dlas = np.array([])
+        map_log_nhis = np.array([])
 
     # Only plot the spectrum within the search range
     this_rest_wavelengths = lya_gp.x
@@ -663,11 +669,17 @@ def plot_prediction_extended_spectrum(
     # 1. Real spectrum space
     # N * (1~k models) * (1~k MAP dlas)
     MAP_z_dla, MAP_log_nhi = lya_gp.maximum_a_posteriori()
-    # make them to be 1-D array
-    map_z_dlas = MAP_z_dla[nth_lya - 1, :nth_lya]
-    map_log_nhis = MAP_log_nhi[nth_lya - 1, :nth_lya]
-    # feed in MAP values and get the absorption profile given (z_dlas, nhis)
-    lya_mu, lya_M, lya_omega2 = lya_gp.this_dla_gp(map_z_dlas, 10**map_log_nhis)
+    if nth_lya >= 1:
+        # make them to be 1-D array
+        map_z_dlas = MAP_z_dla[nth_lya - 1, :nth_lya]
+        map_log_nhis = MAP_log_nhi[nth_lya - 1, :nth_lya]
+        # feed in MAP values and get the absorption profile given (z_dlas, nhis)
+        lya_mu, lya_M, lya_omega2 = lya_gp.this_dla_gp(map_z_dlas, 10**map_log_nhis)
+    else:
+        lya_mu = gp.this_mu
+        # place holder for the maps
+        map_z_dlas = np.array([])
+        map_log_nhis = np.array([])
 
     # Only plot the spectrum within the search range
     this_rest_wavelengths = lya_gp.x
@@ -1018,10 +1030,12 @@ def main(
         max_Lya,
     )
 
-    MAP_z_lyas, MAP_log_nhis = lya_gp.maximum_a_posteriori()
-
     # MAP estimates
     nth_lya = model_posteriors.argmax()  # the index of the maximum posterior
+    MAP_z_lyas, MAP_log_nhis = lya_gp.maximum_a_posteriori()
+    map_z_dlas = MAP_z_lyas[nth_lya - 1, :nth_lya]
+    map_log_nhis = MAP_log_nhis[nth_lya - 1, :nth_lya]
+
     # Plot the sample predictions
     print("[Info] Plotting the sample predictions ...")
     plot_sample_predictions(
@@ -1061,8 +1075,8 @@ def main(
         # Detected number of absorbers and model posteriors, and the redshifts and nhis
         f.write("Detected Number of Absorbers: {}\n".format(nth_lya))
         f.write("Model Posteriors: {}\n".format(model_posteriors))
-        f.write("MAP z_lyas: {}\n".format(MAP_z_lyas))
-        f.write("MAP log_nhis: {}\n".format(MAP_log_nhis))
+        f.write("MAP z_lyas: {}\n".format(map_z_dlas))
+        f.write("MAP log_nhis: {}\n".format(map_log_nhis))
 
         # Time taken for the detection
         f.write("Time Taken: {:.4g} seconds\n".format(time.time() - tt))
