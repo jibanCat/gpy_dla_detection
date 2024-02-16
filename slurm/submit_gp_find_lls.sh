@@ -16,7 +16,7 @@
 #SBATCH --ntasks=8
 #SBATCH --mem=32G
 #SBATCH --job-name=gp_find_lls_nspec
-#SBATCH -p epyc
+#SBATCH -p short
 
 echo "Running gp_find_lls.py with the following parameters:"
 echo "NSPEC = $NSPEC"
@@ -27,7 +27,7 @@ echo "LLS_SAMPLE_H5 = $LLS_SAMPLE_H5"
 echo "----"
 
 # run python script with variable arguments
-/rhome/mho026/.conda/envs/fast-mpi4py/bin/python examples/gp_find_lls.py \
+/rhome/mho026/.conda/envs/fast-mpi4py/bin/python -u examples/gp_find_lls.py \
     --nspec $NSPEC \
     --max_Lya $MAX_LYA \
     --num_lines $NUM_LINES \
