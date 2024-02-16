@@ -846,6 +846,7 @@ def main(
     print("Redshift: {}".format(z_qso))
     print("SN_1150A: {}".format(loader.SN_1150A[nspec]))
     print("Classification Outcome: {}".format(loader.classification_outcome[nspec]))
+    print("Note:  (1: quasar with LLS; 2: quasar without LLS; 4: non quasar)")
     with open(os.path.join(img_dir, "Fagamalli_quasar_info.txt"), "w") as f:
         f.write("Quasar Name: {}\n".format(loader.quasar_name[nspec]))
         f.write("Redshift: {}\n".format(z_qso))
@@ -857,6 +858,7 @@ def main(
         f.write(
             "Classification Outcome: {}\n".format(loader.classification_outcome[nspec])
         )
+        f.write("Note:  (1: quasar with LLS; 2: quasar without LLS; 4: non quasar)")
         f.write("LLS Redshift: {}\n".format(loader.LLS_redshift[nspec]))
 
     # If we haven't downloaded the file, this cell will help you download the file from SDSS database
@@ -990,32 +992,6 @@ def main(
 
     print("Spend {:.4g} seconds".format(time.time() - tt))
 
-    # Plot the sample predictions
-    print("[Info] Plotting the sample predictions ...")
-    plot_sample_predictions(
-        max_Lya,
-        lya_gp,
-        gp,
-        z_qso,
-    )
-    plt.savefig(os.path.join(img_dir, "sample_predictions.png"), dpi=150, format="png")
-    plt.clf()
-    plt.close()
-
-    # Plot the extended spectrum prediction
-    plot_prediction_extended_spectrum(
-        max_Lya,
-        lya_gp,
-        gp,
-        rest_wavelengths,
-        flux,
-    )
-    plt.savefig(
-        os.path.join(img_dir, "extended_predictions.png"), dpi=150, format="png"
-    )
-    plt.clf()
-    plt.close()
-
     # Save the processed data into an HDF5 file
     print("[Info] Saving the processed data into an HDF5 file ...")
     model_posteriors = save_processed_file(
@@ -1029,6 +1005,34 @@ def main(
 
     MAP_z_lyas, MAP_log_nhis = lya_gp.maximum_a_posteriori()
 
+    # MAP estimates
+    nth_lya = model_posteriors.argmax()  # the index of the maximum posterior
+    # Plot the sample predictions
+    print("[Info] Plotting the sample predictions ...")
+    plot_sample_predictions(
+        nth_lya,
+        lya_gp,
+        gp,
+        z_qso,
+    )
+    plt.savefig(os.path.join(img_dir, "sample_predictions.png"), dpi=150, format="png")
+    plt.clf()
+    plt.close()
+
+    # Plot the extended spectrum prediction
+    plot_prediction_extended_spectrum(
+        nth_lya,
+        lya_gp,
+        gp,
+        rest_wavelengths,
+        flux,
+    )
+    plt.savefig(
+        os.path.join(img_dir, "extended_predictions.png"), dpi=150, format="png"
+    )
+    plt.clf()
+    plt.close()
+
     # Save the basic information of the LLs detection run:
     with open(os.path.join(img_dir, "LLS_detection_info.txt"), "w") as f:
         f.write("Spectrum: {}\n".format(filename))
@@ -1040,7 +1044,7 @@ def main(
         f.write("Number of LLS Samples: {}\n".format(len(samples_log_nhis)))
 
         # Detected number of absorbers and model posteriors, and the redshifts and nhis
-        f.write("Detected Number of Absorbers: {}\n".format(max_Lya))
+        f.write("Detected Number of Absorbers: {}\n".format(nth_lya))
         f.write("Model Posteriors: {}\n".format(model_posteriors))
         f.write("MAP z_lyas: {}\n".format(MAP_z_lyas))
         f.write("MAP log_nhis: {}\n".format(MAP_log_nhis))
