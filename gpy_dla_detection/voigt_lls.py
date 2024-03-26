@@ -223,6 +223,9 @@ instrument_profile: np.ndarray = np.array(
     ]
 )
 
+# Lyman limit wavelength
+lambda_Lyman_limit: float = 911.7641  # Å
+
 
 def Gaussian(x: np.ndarray, sigma: float) -> np.ndarray:
     """
@@ -248,10 +251,43 @@ def Voigt(x: np.ndarray, sigma: float, gamma: float) -> np.ndarray:
     return np.real(wofz(z)) / (np.sqrt(2 * np.pi) * sigma)
 
 
+def tau_LLS_break(
+    wavelengths: np.ndarray,
+    nhi: float,
+    z_lls: float,
+):
+    """
+    The optical depth of the Lyman limit system (LLS) break:
+        tau_LLS_break = nhi / 10**17.2 cm⁻² (\lambda( < 912 Å) / 912 Å )^3
+
+    The \lambda here is the rest-frame wavelength of the LLS system,
+        \lambda = \lambda_obs / ( 1 + z_LLS )
+
+    Parameters:
+    ----
+    wavelengths (np.ndarray) : observed wavelengths (Å)
+    nhi (float) : column density of this absorber   (cm⁻²)
+    z_lls (float) : the redshift of this absorber   (dimensionless)
+    """
+    # rest-frame wavelengths of the LLS system
+    rest_wavelengths = wavelengths / (1 + z_lls)
+
+    # the optical depth of the LLS break
+    tau_lls_ = (
+        np.float64(nhi) / 10**17.2 * (rest_wavelengths / lambda_Lyman_limit) ** 3
+    )
+    # we only count the wavelengths shorter than the Lyman limit, i.e., 912 Å
+    ind = rest_wavelengths > lambda_Lyman_limit
+    tau_lls_[ind] = 0
+
+    # the optical depth of the LLS break
+    return tau_lls_
+
+
 def voigt_absorption(
     wavelengths: np.ndarray,
     nhi: float,
-    z_dla: float,
+    z_lls: float,
     num_lines: int = 3,
     broadening: bool = True,
 ) -> np.ndarray:
@@ -262,7 +298,7 @@ def voigt_absorption(
     ----
     wavelengths (np.ndarray) : observed wavelengths (Å)
     nhi (float) : column density of this absorber   (cm⁻²)
-    z_dla (float) : the redshift of this absorber   (dimensionless)
+    z_lls (float) : the redshift of this absorber   (dimensionless)
 
     raw_profile =
         exp( nhi * ( - leading_constants[j] * Voigt(velocity, sigma, gammas[j] ) )  )
@@ -296,7 +332,7 @@ def voigt_absorption(
     raw_profile = np.empty((num_points,))
 
     # build the multipliers for the relative velocity
-    multipliers = c / (transition_wavelengths[:num_lines] * (1 + z_dla)) / 1e8
+    multipliers = c / (transition_wavelengths[:num_lines] * (1 + z_lls)) / 1e8
 
     # compute raw Voigt profile
     total = np.empty((num_lines, raw_profile.shape[0]))
@@ -306,7 +342,12 @@ def voigt_absorption(
 
         total[l, :] = -leading_constants[l] * Voigt(velocity, sigma, gammas[l])
 
-    raw_profile[:] = np.exp(np.float64(nhi) * np.nansum(total, axis=0))
+    # optical depth of Lyman series lines
+    # - tau_Lyman_series = - nhi * sum( leading_constants[j] * Voigt(velocity, sigma, gammas[j]) )
+    # the total optical depth of the Lyman limit system includes Lyman series and LLS break
+    # - raw_profile = exp( - tau_Lyman_series - tau_LLS_break )
+    tau_LLS_break_ = tau_LLS_break(wavelengths, nhi, z_lls)
+    raw_profile[:] = np.exp(np.float64(nhi) * np.nansum(total, axis=0) - tau_LLS_break_)
 
     if broadening:
         # num_points = len(profile)
