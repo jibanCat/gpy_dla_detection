@@ -17,7 +17,7 @@ from gpy_dla_detection.cddf_samples import (
 
 # Generate and save into files to the default directory
 def generate_vanilla_run_samples(
-    num_samples: int = 10000, resolution: int = 10000
+    num_samples: int = 100000, resolution: int = 10000
 ) -> None:
     """
     Generate samples from the CDDF using inverse transform sampling.
@@ -48,7 +48,7 @@ def generate_vanilla_run_samples(
         f.create_dataset("samples_log_nhis", data=dla_samples)
     with h5py.File(os.path.join(base_dir, "civ_samples.h5"), "w") as f:
         f.create_dataset("halton_sequence", data=civ_halton_sequence)
-        f.create_dataset("samples_log_nhis", data=civ_samples)
+        f.create_dataset("samples_log_civs", data=civ_samples)
     with h5py.File(os.path.join(base_dir, "mgii_samples.h5"), "w") as f:
         f.create_dataset("halton_sequence", data=mgii_halton_sequence)
-        f.create_dataset("samples_log_nhis", data=mgii_samples)
+        f.create_dataset("samples_log_mgiis", data=mgii_samples)
