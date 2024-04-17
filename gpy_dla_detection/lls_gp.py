@@ -733,7 +733,7 @@ class LLSGPDR12(DLAGP):
         """
         Compute the log model evidence for the presence of LLSs in the quasar spectra.
         """
-        for num_lls in range(max_lls):  # count from zero to max_lls - 1
+        for num_lls in range(1, max_lls + 1):  # count from zero to max_lls
             # [Need to be parallelized]
             # Roman's code has this part to be parallelized.
             # TODO: threading this part
@@ -744,8 +744,8 @@ class LLSGPDR12(DLAGP):
                 nhis = np.array([self.dla_samples.nhi_samples[i]])
 
                 # query the 2:k LLS parameters {z_lls, logNHI}_{i=2}^k_lls
-                if num_lls > 0:
-                    base_ind = self.base_sample_inds_lls[:num_lls, i]
+                if num_lls > 1:
+                    base_ind = self.base_sample_inds_lls[: (num_lls - 1), i]
 
                     z_lls_2_k = self.sample_z_dlas[base_ind]
                     log_nhis_2_k = self.dla_samples.log_nhi_samples[base_ind]
@@ -770,10 +770,10 @@ class LLSGPDR12(DLAGP):
             # check if any pair of absorbers in this sample is too close this has to
             # happen outside the parfor because "continue" slows things down
             # dramatically
-            if num_lls > 0:
+            if num_lls > 1:
                 # all_z_llss : (num_llss, num_lls_samples)
                 ind = self.base_sample_inds_lls[
-                    :num_lls, :
+                    : (num_lls - 1), :
                 ]  # (num_llss - 1, num_lls_samples)
 
                 all_z_dlas = np.concatenate(
@@ -832,7 +832,7 @@ class LLSGPDR12(DLAGP):
         """
         Compute the log model evidence for the presence of MgII absorbers in the quasar spectra.
         """
-        for num_mgii in range(max_mgiis):
+        for num_mgii in range(1, max_mgiis + 1):
             # [Need to be parallelized]
             # Roman's code has this part to be parallelized.
 
@@ -843,8 +843,8 @@ class LLSGPDR12(DLAGP):
                 nmgii = np.array([self.mgii_samples.nmgii_samples[i]])
 
                 # query the 2:k MgII parameters {z, logN}_{i=2}^k
-                if num_mgii > 0:
-                    base_ind = self.base_sample_inds_mgii[:num_mgii, i]
+                if num_mgii > 1:
+                    base_ind = self.base_sample_inds_mgii[: (num_mgii - 1), i]
 
                     z_mgii_2_k = self.sample_z_mgiis[base_ind]
                     log_nmgii_2_k = self.mgii_samples.log_nmgii_samples[base_ind]
@@ -874,9 +874,9 @@ class LLSGPDR12(DLAGP):
             # check if any pair of absorbers in this sample is too close this has to
             # happen outside the parfor because "continue" slows things down
             # dramatically
-            if num_mgii > 0:
+            if num_mgii > 1:
                 # all_z_mgii : (num_mgii, num_mgii_samples)
-                ind = self.base_sample_inds_mgii[:num_mgii, :]
+                ind = self.base_sample_inds_mgii[: (num_mgii - 1), :]
 
                 all_z_mgiis = np.concatenate(
                     [self.sample_z_mgiis[None, :], self.sample_z_mgiis[ind]], axis=0
@@ -934,7 +934,7 @@ class LLSGPDR12(DLAGP):
         """
         Compute the log model evidence for the presence of CIV absorbers in the quasar spectra.
         """
-        for num_civ in range(max_civs):
+        for num_civ in range(1, max_civs + 1):
             # [Need to be parallelized]
             # Roman's code has this part to be parallelized.
             # TODO: threading this part
@@ -945,8 +945,8 @@ class LLSGPDR12(DLAGP):
                 nciv = np.array([self.civ_samples.nciv_samples[i]])
 
                 # query the 2:k CIV parameters {z, logN}_{i=2}^k
-                if num_civ > 0:
-                    base_ind = self.base_sample_inds_civ[:num_civ, i]
+                if num_civ > 1:
+                    base_ind = self.base_sample_inds_civ[: (num_civ - 1), i]
 
                     z_civ_2_k = self.sample_z_civs[base_ind]
                     log_nciv_2_k = self.civ_samples.log_nciv_samples[base_ind]
@@ -971,10 +971,10 @@ class LLSGPDR12(DLAGP):
             # check if any pair of absorbers in this sample is too close this has to
             # happen outside the parfor because "continue" slows things down
             # dramatically
-            if num_civ > 0:
+            if num_civ > 1:
                 # all_z_civ : (num_civ, num_civ_samples)
                 ind = self.base_sample_inds_civ[
-                    :num_civ, :
+                    : (num_civ - 1), :
                 ]  # (num_civ - 1, num_civ_samples)
 
                 all_z_civs = np.concatenate(
@@ -1286,6 +1286,7 @@ class LLSGPDR12(DLAGP):
                 )
             )
             self.log_model_evidence_coupling(i, j, k)
+            print("... {}".format(self.log_likelihoods[i, j, k]))
 
         return self.log_likelihoods
 
