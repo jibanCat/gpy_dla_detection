@@ -1233,7 +1233,7 @@ class LLSGPDR12(DLAGP):
         # sorry, let me follow the convention of the MATLAB code here
         # could be changed to (max_dlas, num_dla_samples) in the future.
         self.sample_log_likelihoods = np.empty(
-            (self.params.num_dla_samples, max_lls, max_mgiis, max_civs)
+            (self.params.num_dla_samples, max_lls + 1, max_mgiis + 1, max_civs + 1)
         )
         self.sample_log_likelihoods[:] = np.nan
 
