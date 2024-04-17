@@ -379,7 +379,9 @@ class LLSGPDR12(DLAGP):
         self,
         params: LLSParameters,
         prior: PriorCatalog,
-        lya_samples: DLASamplesMAT,
+        lya_samples: LyaSamples,
+        civ_samples: CIVSamples,
+        mgii_samples: MgIISamples,
         learned_file: str = "learned_qso_model_lyseries_variance_kim_dr9q_minus_concordance.mat",
         prev_tau_0: float = 0.00554,
         prev_beta: float = 3.182,
@@ -413,12 +415,8 @@ class LLSGPDR12(DLAGP):
             broadening=broadening,
         )
 
-        self.civ_samples = CIVSamples(
-            params, prior, lya_samples.offset_samples, lya_samples.log_nciv_samples
-        )
-        self.mgii_samples = MgIISamples(
-            params, prior, lya_samples.offset_samples, lya_samples.log_nmgii_samples
-        )
+        self.civ_samples = civ_samples
+        self.mgii_samples = mgii_samples
 
         # cache for absorption profiles
         self.absorption_cache = {}
@@ -502,7 +500,7 @@ class LLSGPDR12(DLAGP):
         # compute the absorption profile
         absorption = voigt_absorption_civ(
             wavelengths,
-            z_civs=z_civ,
+            z_civ=z_civ,
             nciv=nciv,
             sigma=np.sqrt(2) * 10.5,  # km/s, from Kim et al. 2003, median b = 10.5 km/s
             broadening=self.broadening,
@@ -548,7 +546,7 @@ class LLSGPDR12(DLAGP):
         # compute the absorption profile
         absorption = voigt_absorption_mgii(
             wavelengths,
-            z_mgiis=z_mgii,
+            z_mgii=z_mgii,
             nmgii=nmgii,
             sigma=np.sqrt(2)
             * 5.7,  # km/s, from Churchill et al. 2020, median b = 5.7 km/s
@@ -589,14 +587,14 @@ class LLSGPDR12(DLAGP):
         # HI absorption corresponding to this sample
         absorption = self.voigt_absorption_lls_precomputed(
             z_lls=z_lls[0],
-            nhi=nhis[0],
+            nhis=nhis[0],
         )
 
         # multiple HI absorptions
         for j in range(1, k_lls):
             absorption = absorption * self.voigt_absorption_lls_precomputed(
                 z_lls=z_lls[j],
-                nhi=nhis[j],
+                nhis=nhis[j],
             )
 
         assert len(absorption) == len(self.this_mu)
@@ -628,14 +626,14 @@ class LLSGPDR12(DLAGP):
 
         # MgII absorption corresponding to this sample
         absorption = self.voigt_absorption_mgii_precomputed(
-            z_mgiis=z_mgiis[0],
+            z_mgii=z_mgiis[0],
             nmgii=nmgii[0],
         )
 
         # multiple MgII absorptions
         for j in range(1, k_mgiis):
             absorption = absorption * self.voigt_absorption_mgii_precomputed(
-                z_mgiis=z_mgiis[j],
+                z_mgii=z_mgiis[j],
                 nmgii=nmgii[j],
             )
 
@@ -668,14 +666,14 @@ class LLSGPDR12(DLAGP):
 
         # CIV absorption corresponding to this sample
         absorption = self.voigt_absorption_civ_precomputed(
-            z_civs=z_civs[0],
+            z_civ=z_civs[0],
             nciv=ncivs[0],
         )
 
         # multiple CIV absorptions
         for j in range(1, k_civs):
             absorption = absorption * self.voigt_absorption_civ_precomputed(
-                z_civs=z_civs[j],
+                z_civ=z_civs[j],
                 nciv=ncivs[j],
             )
 
@@ -1234,10 +1232,10 @@ class LLSGPDR12(DLAGP):
 
         # sorry, let me follow the convention of the MATLAB code here
         # could be changed to (max_dlas, num_dla_samples) in the future.
-        sample_log_likelihoods = np.empty(
+        self.sample_log_likelihoods = np.empty(
             (self.params.num_dla_samples, max_lls, max_mgiis, max_civs)
         )
-        sample_log_likelihoods[:] = np.nan
+        self.sample_log_likelihoods[:] = np.nan
 
         # prepare z_dla samples
         self.sample_z_dlas = self.dla_samples.sample_z_dlas(
@@ -1290,3 +1288,77 @@ class LLSGPDR12(DLAGP):
             self.log_model_evidence_coupling(i, j, k)
 
         return self.log_likelihoods
+
+    def log_priors_mgii(self, z_qso: float, max_mgii: int) -> np.ndarray:
+        """
+        Compute the log priors for MgII absorbers in the quasar spectra.
+        """
+        log_priors = self.log_priors(z_qso=z_qso, max_dlas=max_mgii)
+        # Approximate
+        # TODO: do the exact number
+        log_priors += 12 / np.log10(np.exp(1))
+
+        return log_priors
+
+    def log_priors_civ(self, z_qso: float, max_civ: int) -> np.ndarray:
+        """
+        Compute the log priors for CIV absorbers in the quasar spectra.
+        """
+        log_priors = self.log_priors(z_qso=z_qso, max_dlas=max_civ)
+        # Approximate
+        # TODO: do the exact number
+        log_priors += 10 / np.log10(np.exp(1))
+
+        return log_priors
+
+    def maximum_a_posteriori(self):
+        """
+        Find the maximum a posterior parameter pairs
+        {(z_lls, logNHI)}_{i=1}^k, {(z_mgii, logNmgii)}_{i=1}^l, {(z_civ, logNciv)}_{i=1}^m
+
+        :return (MAP_z_lls, MAP_log_nhi, MAP_z_mgii, MAP_log_nmgii, MAP_z_civ, MAP_log_nciv)
+
+        MAP_z_lls : (max_lls, max_lls)
+        MAP_log_nhi : (max_lls, max_lls)
+        MAP_z_mgii : (max_mgiis, max_mgiis)
+        MAP_log_nmgii : (max_mgiis, max_mgiis)
+        MAP_z_civ : (max_civs, max_civs)
+        MAP_log_nciv : (max_civs, max_civs)
+        """
+        maxinds = np.nanargmax(self.sample_log_likelihoods, axis=0)
+
+        max_dlas = self.sample_log_likelihoods.shape[1]
+
+        MAP_z_dla = np.empty((max_dlas, max_dlas))
+        MAP_log_nhi = np.empty((max_dlas, max_dlas))
+        MAP_z_dla[:] = np.nan
+        MAP_log_nhi[:] = np.nan
+
+        # prepare z_dla samples
+        sample_z_dlas = self.dla_samples.sample_z_dlas(
+            self.this_wavelengths, self.z_qso
+        )
+
+        for num_dlas, maxind in enumerate(maxinds):
+            # store k MAP estimates for DLA(k) model
+            if num_dlas > 0:
+                # all_z_dlas : (num_dlas, num_dla_samples)
+                ind = self.base_sample_inds[
+                    :num_dlas, maxind
+                ]  # (num_dlas - 1, num_dla_samples)
+
+                MAP_z_dla[num_dlas, : (num_dlas + 1)] = np.concatenate(
+                    [[sample_z_dlas[maxind]], sample_z_dlas[ind]]
+                )  # (num_dlas, )
+                MAP_log_nhi[num_dlas, : (num_dlas + 1)] = np.concatenate(
+                    [
+                        [self.dla_samples.log_nhi_samples[maxind]],
+                        self.dla_samples.log_nhi_samples[ind],
+                    ]
+                )
+            # for DLA(1) model, only store one MAP estimate
+            else:
+                MAP_z_dla[num_dlas, 0] = sample_z_dlas[maxind]
+                MAP_log_nhi[num_dlas, 0] = self.dla_samples.log_nhi_samples[maxind]
+
+        return MAP_z_dla, MAP_log_nhi

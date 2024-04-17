@@ -159,7 +159,7 @@ def voigt_absorption(
 
         total[l, :] = -leading_constants[l] * Voigt(velocity, sigma, gammas[l])
 
-    raw_profile[:] = np.exp(np.float(nmgii) * np.nansum(total, axis=0))
+    raw_profile[:] = np.exp(np.float64(nmgii) * np.nansum(total, axis=0))
 
     if broadening:
         # num_points = len(profile)
