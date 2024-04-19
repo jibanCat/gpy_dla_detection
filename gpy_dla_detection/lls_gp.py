@@ -30,9 +30,9 @@ class LLSParameters(Parameters):
 
     def __init__(
         self,
-        num_dla_samples: int = 10000,
-        max_z_cut: float = 3000.0,  # max z_DLA = z_QSO - max_z_cut
-        min_z_cut: float = 3000.0,  # min z_DLA = z_Ly∞ + min_z_cut
+        num_dla_samples: int = 100000,
+        max_z_cut: float = 5000.0,  # max z_DLA = z_QSO - max_z_cut
+        min_z_cut: float = 5000.0,  # min z_DLA = z_Ly∞ + min_z_cut
         **kwargs  # number of parameter samples
     ):
         super().__init__(
@@ -70,7 +70,7 @@ class LLSParameters(Parameters):
         We only consider z_civ overlapping with the HI absorber search range.
         """
         z_hi = self.min_z_dla(wavelengths, z_qso)
-        return (z_hi + 1) / self.civ_1548_wavelength * self.lya_wavelength - 1
+        return (z_hi + 1) / self.civ_1550_wavelength * self.lya_wavelength - 1
 
     def max_z_civ(self, wavelengths: np.ndarray, z_qso: float) -> float:
         """
@@ -79,7 +79,7 @@ class LLSParameters(Parameters):
         We only consider z_civ overlapping with the HI absorber search range.
         """
         z_hi = self.max_z_dla(wavelengths, z_qso)
-        return (z_hi + 1) / self.civ_1548_wavelength * self.lya_wavelength - 1
+        return (z_hi + 1) / self.civ_1550_wavelength * self.lya_wavelength - 1
 
     def min_z_mgii(self, wavelengths: np.ndarray, z_qso: float) -> float:
         """
@@ -88,7 +88,7 @@ class LLSParameters(Parameters):
         We only consider z_mgii overlapping with the HI absorber search range.
         """
         z_hi = self.min_z_dla(wavelengths, z_qso)
-        return (z_hi + 1) / self.mgii_2796_wavelength * self.lya_wavelength - 1
+        return (z_hi + 1) / self.mgii_2803_wavelength * self.lya_wavelength - 1
 
     def max_z_mgii(self, wavelengths: np.ndarray, z_qso: float) -> float:
         """
@@ -97,7 +97,7 @@ class LLSParameters(Parameters):
         We only consider z_mgii overlapping with the HI absorber search range.
         """
         z_hi = self.max_z_dla(wavelengths, z_qso)
-        return (z_hi + 1) / self.mgii_2796_wavelength * self.lya_wavelength - 1
+        return (z_hi + 1) / self.mgii_2803_wavelength * self.lya_wavelength - 1
 
 
 class LyaSamples(DLASamples):
@@ -502,7 +502,8 @@ class LLSGPDR12(DLAGP):
             wavelengths,
             z_civ=z_civ,
             nciv=nciv,
-            sigma=np.sqrt(2) * 10.5,  # km/s, from Kim et al. 2003, median b = 10.5 km/s
+            sigma=np.sqrt(2)
+            * 10.5e5,  # km/s, from Kim et al. 2003, median b = 10.5 km/s
             broadening=self.broadening,
         )
 
@@ -549,7 +550,7 @@ class LLSGPDR12(DLAGP):
             z_mgii=z_mgii,
             nmgii=nmgii,
             sigma=np.sqrt(2)
-            * 5.7,  # km/s, from Churchill et al. 2020, median b = 5.7 km/s
+            * 5.7e5,  # km/s, from Churchill et al. 2020, median b = 5.7 km/s
             num_lines=2,  # doublet
             broadening=self.broadening,
         )
@@ -819,7 +820,7 @@ class LLSGPDR12(DLAGP):
             W = sample_probabilities
             W[nanind] = 0.0
 
-            self.base_sample_inds_lls[num_lls, :] = np.random.choice(
+            self.base_sample_inds_lls[(num_lls - 1), :] = np.random.choice(
                 np.arange(self.params.num_dla_samples).astype(np.int32),
                 size=self.params.num_dla_samples,
                 replace=True,
@@ -921,7 +922,7 @@ class LLSGPDR12(DLAGP):
             W = sample_probabilities
             W[nanind] = 0.0
 
-            self.base_sample_inds_mgii[num_mgii, :] = np.random.choice(
+            self.base_sample_inds_mgii[(num_mgii - 1), :] = np.random.choice(
                 np.arange(self.params.num_dla_samples).astype(np.int32),
                 size=self.params.num_dla_samples,
                 replace=True,
@@ -1020,7 +1021,7 @@ class LLSGPDR12(DLAGP):
             W = sample_probabilities
             W[nanind] = 0.0
 
-            self.base_sample_inds_civ[num_civ, :] = np.random.choice(
+            self.base_sample_inds_civ[(num_civ - 1), :] = np.random.choice(
                 np.arange(self.params.num_dla_samples).astype(np.int32),
                 size=self.params.num_dla_samples,
                 replace=True,
@@ -1077,9 +1078,11 @@ class LLSGPDR12(DLAGP):
 
             # query the MgII parameter {z, logN}_{i=1}
             z_mgii = np.array([])
+            log_nmgii = np.array([])
+            nmgii = np.array([])
             # num = 1, then query p(θmetal2 | D, θmetal1)
             if num_mgii > 0:
-                base_ind_mgii = self.base_sample_inds_mgii[:num_mgii, i]
+                base_ind_mgii = self.base_sample_inds_mgii[: (num_mgii - 1), i]
 
                 z_mgii_2_k = self.sample_z_mgiis[base_ind_mgii]
                 log_nmgii_2_k = self.mgii_samples.log_nmgii_samples[base_ind_mgii]
@@ -1094,8 +1097,10 @@ class LLSGPDR12(DLAGP):
 
             # query the CIV parameter {z, logN}_{i=1}
             z_civ = np.array([])
+            log_nciv = np.array([])
+            nciv = np.array([])
             if num_civ > 0:
-                base_ind_civ = self.base_sample_inds_civ[:num_civ, i]
+                base_ind_civ = self.base_sample_inds_civ[: (num_civ - 1), i]
 
                 z_civ_2_k = self.sample_z_civs[base_ind_civ]
                 log_nciv_2_k = self.civ_samples.log_nciv_samples[base_ind_civ]
@@ -1125,7 +1130,7 @@ class LLSGPDR12(DLAGP):
             all_zs = np.concatenate([all_zs, self.sample_z_dlas[ind]], axis=0)
         # Metals:
         if num_mgii > 0:
-            ind = self.base_sample_inds_mgii[:num_mgii, :]
+            ind = self.base_sample_inds_mgii[: (num_mgii - 1), :]
             all_z_mgiis = self.sample_z_mgiis[ind]  # (num_mgii, num_mgii_samples)
             # convert mgii redshifts to hi redshifts
             all_z_mgiis = (
@@ -1133,7 +1138,7 @@ class LLSGPDR12(DLAGP):
             ) * self.params.mgii_2796_wavelength / self.params.lya_wavelength - 1
             all_zs = np.concatenate([all_zs, all_z_mgiis], axis=0)
         if num_civ > 0:
-            ind = self.base_sample_inds_civ[:num_civ, :]
+            ind = self.base_sample_inds_civ[: (num_civ - 1), :]
             all_z_civs = self.sample_z_civs[ind]  # (num_civ, num_civ_samples)
             # convert civ redshifts to hi redshifts
             all_z_civs = (
@@ -1279,6 +1284,11 @@ class LLSGPDR12(DLAGP):
         for combo in combinations:
             # lls, mgii, civ
             i, j, k = combo
+            # skip the no LLS case
+            if i == 0:
+                print("Skip the case of no LLS")
+                continue
+
             # compute the log model evidence for the coupling terms
             print(
                 "Computing log model evidence for LLSs: {}, MgII: {}, CIV: {}".format(
@@ -1297,7 +1307,7 @@ class LLSGPDR12(DLAGP):
         log_priors = self.log_priors(z_qso=z_qso, max_dlas=max_mgii)
         # Approximate
         # TODO: do the exact number
-        log_priors += 12 / np.log10(np.exp(1))
+        log_priors += 7 / np.log10(np.exp(1))
 
         return log_priors
 
@@ -1308,58 +1318,70 @@ class LLSGPDR12(DLAGP):
         log_priors = self.log_priors(z_qso=z_qso, max_dlas=max_civ)
         # Approximate
         # TODO: do the exact number
-        log_priors += 10 / np.log10(np.exp(1))
+        log_priors += 5 / np.log10(np.exp(1))
 
         return log_priors
 
-    def maximum_a_posteriori(self):
+    # A function to get the maximum posterior model and the corresponding
+    # maximum a posteriori (MAP) parameters
+    def maximum_a_posterior(
+        self,
+        log_posteriors: np.ndarray,
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         """
-        Find the maximum a posterior parameter pairs
-        {(z_lls, logNHI)}_{i=1}^k, {(z_mgii, logNmgii)}_{i=1}^l, {(z_civ, logNciv)}_{i=1}^m
+        Get the maximum a posteriori (MAP) parameters for the maximum posterior model
 
-        :return (MAP_z_lls, MAP_log_nhi, MAP_z_mgii, MAP_log_nmgii, MAP_z_civ, MAP_log_nciv)
+        Parameters
+        ----------
+        log_posteriors : np.ndarray
+            The log posteriors of the models
 
-        MAP_z_lls : (max_lls, max_lls)
-        MAP_log_nhi : (max_lls, max_lls)
-        MAP_z_mgii : (max_mgiis, max_mgiis)
-        MAP_log_nmgii : (max_mgiis, max_mgiis)
-        MAP_z_civ : (max_civs, max_civs)
-        MAP_log_nciv : (max_civs, max_civs)
+        Returns
+        -------
+        Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]
+            The maximum a posteriori (MAP) parameters for the maximum posterior model
         """
-        maxinds = np.nanargmax(self.sample_log_likelihoods, axis=0)
+        # Get the indices of the maximum log posterior
+        i, j, k = np.unravel_index(np.nanargmax(log_posteriors), log_posteriors.shape)
 
-        max_dlas = self.sample_log_likelihoods.shape[1]
+        print("Maximum posterior model: LLS={}, MgII={}, CIV={}".format(i, j, k))
 
-        MAP_z_dla = np.empty((max_dlas, max_dlas))
-        MAP_log_nhi = np.empty((max_dlas, max_dlas))
-        MAP_z_dla[:] = np.nan
-        MAP_log_nhi[:] = np.nan
+        # Get the maximum posteriori
+        maxind = np.nanargmax(self.sample_log_likelihoods[:, i, j, k])
 
-        # prepare z_dla samples
-        sample_z_dlas = self.dla_samples.sample_z_dlas(
-            self.this_wavelengths, self.z_qso
+        # MgII
+        MAP_log_nmgii = np.array([])
+        MAP_z_mgiis = np.array([])
+        if j > 0:
+            ind = self.base_sample_inds_mgii[:j, maxind]
+            MAP_log_nmgii = np.append(
+                MAP_log_nmgii, self.mgii_samples.log_nmgii_samples[ind]
+            )
+            MAP_z_mgiis = np.append(MAP_z_mgiis, self.sample_z_mgiis[ind])
+        # CIV
+        MAP_log_nciv = np.array([])
+        MAP_z_civ = np.array([])
+        if k > 0:
+            ind = self.base_sample_inds_civ[:k, maxind]
+            MAP_log_nciv = np.append(
+                MAP_log_nciv, self.civ_samples.log_nciv_samples[ind]
+            )
+            MAP_z_civ = np.append(MAP_z_civ, self.sample_z_civs[ind])
+
+        # LLS
+        MAP_log_nhi = self.dla_samples.log_nhi_samples[maxind]
+        MAP_z_lya = self.sample_z_dlas[maxind]
+
+        for _i in range(i - 1):
+            ind = self.base_sample_inds_lls[_i, maxind]
+            MAP_log_nhi = np.append(MAP_log_nhi, self.dla_samples.log_nhi_samples[ind])
+            MAP_z_lya = np.append(MAP_z_lya, self.sample_z_dlas[ind])
+
+        return (
+            MAP_log_nhi,
+            MAP_z_lya,
+            MAP_log_nmgii,
+            MAP_z_mgiis,
+            MAP_log_nciv,
+            MAP_z_civ,
         )
-
-        for num_dlas, maxind in enumerate(maxinds):
-            # store k MAP estimates for DLA(k) model
-            if num_dlas > 0:
-                # all_z_dlas : (num_dlas, num_dla_samples)
-                ind = self.base_sample_inds[
-                    :num_dlas, maxind
-                ]  # (num_dlas - 1, num_dla_samples)
-
-                MAP_z_dla[num_dlas, : (num_dlas + 1)] = np.concatenate(
-                    [[sample_z_dlas[maxind]], sample_z_dlas[ind]]
-                )  # (num_dlas, )
-                MAP_log_nhi[num_dlas, : (num_dlas + 1)] = np.concatenate(
-                    [
-                        [self.dla_samples.log_nhi_samples[maxind]],
-                        self.dla_samples.log_nhi_samples[ind],
-                    ]
-                )
-            # for DLA(1) model, only store one MAP estimate
-            else:
-                MAP_z_dla[num_dlas, 0] = sample_z_dlas[maxind]
-                MAP_log_nhi[num_dlas, 0] = self.dla_samples.log_nhi_samples[maxind]
-
-        return MAP_z_dla, MAP_log_nhi
