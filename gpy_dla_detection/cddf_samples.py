@@ -88,7 +88,7 @@ def mgii_normalized_pdf(log_n):
     # CDDF for MgII
     unnormalized_pdf = lambda log_nmgii: 10 ** log_cddf_mgii(log_nmgii)
 
-    Z = quad(unnormalized_pdf, 12, 15)[0]
+    Z = quad(unnormalized_pdf, 14, 16)[0]
 
     return unnormalized_pdf(log_n) / Z
 
@@ -106,7 +106,7 @@ def civ_normalized_pdf(log_n):
     # CDDF for CIV
     unnormalized_pdf = lambda log_nciv: 10 ** log_cddf_civ(log_nciv)
 
-    Z = quad(unnormalized_pdf, 12, 15)[0]
+    Z = quad(unnormalized_pdf, 14, 16)[0]
 
     return unnormalized_pdf(log_n) / Z
 
@@ -197,7 +197,7 @@ def generate_mgii_samples(num_samples: int, resolution: int = 10000):
     - samples: A NumPy array of samples from the MgII CDDF.
     """
     # Define the domain of the MgII CDDF
-    domain = (12.0, 15.0)
+    domain = (14.0, 16.0)
     sampler = Halton(
         d=2,  # dimension of parameter space
         scramble=False,
@@ -225,7 +225,7 @@ def generate_civ_samples(num_samples: int, resolution: int = 10000):
     - samples: A NumPy array of samples from the CIV CDDF.
     """
     # Define the domain of the CIV CDDF
-    domain = (12.0, 15.0)
+    domain = (14.0, 16.0)
     sampler = Halton(
         d=2,  # dimension of parameter space
         scramble=False,
