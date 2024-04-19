@@ -441,6 +441,10 @@ class LLSGPDR12(DLAGP):
         """
         # check if the absorption profile is already computed
         if (self.lls_label, z_lls, nhis) in self.absorption_cache:
+            print(
+                "[Debug] Query the cache for LLS absorption profile",
+                (self.lls_label, z_lls, nhis),
+            )
             return self.absorption_cache[(self.lls_label, z_lls, nhis)]
 
         # to retain only unmasked pixels from computed absorption profile
