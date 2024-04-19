@@ -1324,7 +1324,7 @@ class LLSGPDR12(DLAGP):
 
     # A function to get the maximum posterior model and the corresponding
     # maximum a posteriori (MAP) parameters
-    def maximum_a_posterior(
+    def maximum_a_posteriori(
         self,
         log_posteriors: np.ndarray,
     ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
