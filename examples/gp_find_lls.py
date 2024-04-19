@@ -40,6 +40,8 @@ from gpy_dla_detection.null_gp import NullGP
 from gpy_dla_detection.lls_gp import LLSGPDR12
 from gpy_dla_detection.lls_gp import LyaSamples, CIVSamples, MgIISamples
 
+from gpy_dla_detection import voigt, voigt_mgii, voigt_civ
+
 from scipy.integrate import (
     quad,
 )  # to get the normalization constant for the probability density function
@@ -202,15 +204,15 @@ def plot_model(gp: NullGPDR12):
     This function visualizes the fit of the GP model to the observed quasar spectrum, including
     the mean function and uncertainty bounds, to assess the quality of the model.
     """
-    plt.figure(figsize=(16, 3))
+    fig, ax = plt.subplots(1, 1, figsize=(16, 5))
 
     # Mean function
-    plt.plot(
+    ax.plot(
         gp.X,  # quasar spectrum's rest-frame wavelengths
         gp.Y,  # quasar spectrum's flux
         label="Data",
     )
-    plt.fill_between(
+    ax.fill_between(
         gp.X,
         gp.Y - 2 * np.sqrt(gp.v),
         gp.Y + 2 * np.sqrt(gp.v),
@@ -218,23 +220,34 @@ def plot_model(gp: NullGPDR12):
         color="C0",
         alpha=0.3,
     )
-    plt.plot(
+    ax.plot(
         gp.rest_wavelengths,
         gp.mu,
         label="GP null model (mu = continuum)",
         color="C3",
         ls="--",
     )
-    plt.plot(
+    ax.plot(
         gp.X,
         gp.this_mu,
         label="GP null model (mu = meanflux)",  # GP model's mean function
     )
-    plt.xlabel("Rest-frame Wavelengths [$\AA$]")
-    plt.ylabel("Normalized Flux")
-    plt.legend(loc="upper right")
-    plt.ylim(-1, 5)
-    plt.tight_layout()
+    ax.set_xlabel("Rest-frame Wavelengths [$\AA$]")
+    ax.set_ylabel("Normalized Flux")
+    ax.legend(loc="upper right")
+    # Add the observed wavelengths to the top x-axis
+    # with the correponding ticks of the bottom x-axis
+    # top ticks = bottom ticks  * (1 + z_qso)
+    ax2 = ax.twiny()
+    ax2.set_xticks(ax.get_xticks())
+    ax2.set_xticklabels(
+        ["{:.0f}".format(tick * (1 + gp.z_qso)) for tick in ax.get_xticks()],
+    )
+    ax2.set_xlim(ax.get_xlim())
+    ax2.set_xlabel("Observed-frame Wavelengths [$\AA$]")
+
+    ax.set_ylim(-1, 5)
+    fig.tight_layout()
 
 
 def plot_lls_prior(prior: PriorCatalog):
@@ -502,11 +515,11 @@ def plot_sample_predictions(
 
 
 def plot_prediction_extended_spectrum(
-    nth_lya: int,
     lya_gp: LLSGPDR12,
     gp: NullGPDR12,
     rest_wavelengths: np.ndarray,
     flux: np.ndarray,
+    log_posteriors: np.ndarray,
 ):
     """
     Plots the extended spectrum prediction for a quasar, incorporating the effects of Lyman Alpha absorbers.
@@ -518,20 +531,34 @@ def plot_prediction_extended_spectrum(
         rest_wavelengths (np.ndarray): Array of rest wavelengths for the quasar spectrum.
         flux (np.ndarray): Array of flux values for the quasar spectrum.
     """
+    # MAP absobers:
+    i, j, k = np.unravel_index(np.nanargmax(log_posteriors), log_posteriors.shape)
+
     # 1. Real spectrum space
-    # N * (1~k models) * (1~k MAP dlas)
-    MAP_z_dla, MAP_log_nhi = lya_gp.maximum_a_posteriori()
-    if nth_lya >= 1:
-        # make them to be 1-D array
-        map_z_dlas = MAP_z_dla[nth_lya - 1, :nth_lya]
-        map_log_nhis = MAP_log_nhi[nth_lya - 1, :nth_lya]
-        # feed in MAP values and get the absorption profile given (z_dlas, nhis)
-        lya_mu, lya_M, lya_omega2 = lya_gp.this_dla_gp(map_z_dlas, 10**map_log_nhis)
-    else:
-        lya_mu = gp.this_mu
-        # place holder for the maps
-        map_z_dlas = np.array([])
-        map_log_nhis = np.array([])
+    # Get the MAP values
+    (
+        MAP_log_nhi,
+        MAP_z_lya,
+        MAP_log_nmgii,
+        MAP_z_mgiis,
+        MAP_log_nciv,
+        MAP_z_civ,
+    ) = lya_gp.maximum_a_posteriori(log_posteriors)
+
+    # feed in MAP values and get the absorption profile given (z_dlas, nhis)
+    abs_lls = lya_gp.this_lls_gp(MAP_z_lya, 10**MAP_log_nhi)
+    abs_mgii = lya_gp.this_mgii_gp(MAP_z_mgiis, 10**MAP_log_nmgii)
+    abs_civ = lya_gp.this_civ_gp(MAP_z_civ, 10**MAP_log_nciv)
+
+    # use the combined absorption profile to multiply to the GP model
+    abs_combined = abs_lls * abs_mgii * abs_civ
+    abs_mu = lya_gp.this_mu * abs_combined
+
+    # Only plot the spectrum within the search range
+    this_rest_wavelengths = lya_gp.x
+    ind = this_rest_wavelengths < lya_gp.params.lya_wavelength
+    this_rest_wavelengths = this_rest_wavelengths[ind]
+    abs_mu = abs_mu[ind]
 
     # Only plot the spectrum within the search range
     this_rest_wavelengths = lya_gp.x
@@ -540,7 +567,7 @@ def plot_prediction_extended_spectrum(
     this_rest_wavelengths = this_rest_wavelengths[ind]
     lya_mu = lya_mu[ind]
 
-    fig, ax = plt.subplots(1, 1, figsize=(16, 3))
+    fig, ax = plt.subplots(1, 1, figsize=(16, 5))
 
     # Spectrum space
     ax.plot(
@@ -559,10 +586,7 @@ def plot_prediction_extended_spectrum(
     ax.plot(
         this_rest_wavelengths,
         lya_mu,
-        label=r"$\mathcal{M}$"
-        + r" HCD({n}); ".format(n=nth_lya)
-        + "z_dlas = ({}); ".format(",".join("{:.3g}".format(z) for z in map_z_dlas))
-        + "lognhi = ({})".format(",".join("{:.3g}".format(n) for n in map_log_nhis)),
+        label=r"$\mathcal{M}$" + "LLS({i}) MgII({j}) CIV({k})".format(i=i, j=j, k=k),
         color="red",
         # lw=2,
     )
@@ -574,6 +598,9 @@ def plot_prediction_extended_spectrum(
         color="C0",
         alpha=0.3,
     )
+    # Adding MAP lines to the plot
+    ax = add_MAP_vlines(lya_gp, MAP_z_lya, MAP_z_mgiis, MAP_z_civ, ax, lya_gp.z_qso)
+
     ax.set_xlim(750, 1415)
     ax.set_ylim(-1, 5)
     plt.legend()
@@ -581,7 +608,120 @@ def plot_prediction_extended_spectrum(
     plt.ylabel("Normalized Flux")
     plt.tight_layout()
 
+    # Add the observed wavelengths to the top x-axis
+    # with the correponding ticks of the bottom x-axis
+    # top ticks = bottom ticks  * (1 + z_qso)
+    ax2 = ax.twiny()
+    ax2.set_xticks(ax.get_xticks())
+    ax2.set_xticklabels(
+        ["{:.0f}".format(tick * (1 + lya_gp.z_qso)) for tick in ax.get_xticks()],
+    )
+    ax2.set_xlim(ax.get_xlim())
+    ax2.set_xlabel("Observed-frame Wavelengths [$\AA$]")
     return fig, ax
+
+
+def add_MAP_vlines(
+    lya_gp: LLSGPDR12,
+    MAP_z_lya: np.ndarray,
+    MAP_z_mgiis: np.ndarray,
+    MAP_z_civ: np.ndarray,
+    ax: plt.Axes,
+    z_qso: float,
+):
+    """
+    Adds vertical lines to the plot for the maximum a posteriori (MAP) redshifts of absorbers.
+
+    Parameters:
+        MAP_z_lya (float): The MAP redshift of the Lyman Alpha absor
+        MAP_z_mgiis (float): The MAP redshift of the MgII absorber.
+        MAP_z_civ (float): The MAP redshift of the CIV absorber.
+        ax (Axes): The matplotlib Axes object to add the lines to.
+    """
+    # Add Horizontal line at to the redshifts of LLS
+    for z in MAP_z_lya:
+        # For all ly series lines
+        ax.vlines(
+            [
+                (1 + z) * lya_gp.params.lya_wavelength / (1 + z_qso),
+                (1 + z) * voigt.transition_wavelengths[1] * 1e8 / (1 + z_qso),
+                (1 + z) * voigt.transition_wavelengths[2] * 1e8 / (1 + z_qso),
+                # (1 + z) * voigt.transition_wavelengths[3] * 1e8 / (1 + z_qso),
+                (1 + z) * lya_gp.params.lyman_limit / (1 + z_qso),
+            ],
+            -1,
+            5,
+            color="C1",
+            ls="--",
+            lw=1,
+        )
+        # Add text to the redshifts of LLS
+        labels = [r"$Ly\alpha$", r"$Ly\beta$", r"$Ly\gamma$", r"$Ly\infty$"]
+        for i in range(3):
+            ax.text(
+                (1 + z) * voigt.transition_wavelengths[i] * 1e8 / (1 + z_qso),
+                3.5,
+                labels[i] + ": z_lls={:.3g}".format(z),
+                rotation=90,
+                color="C1",
+                fontdict={"fontsize": 16},
+            )
+        ax.text(
+            (1 + z) * lya_gp.params.lyman_limit / (1 + z_qso),
+            3.5,
+            labels[-1] + ": z_lls={:.3g}".format(z),
+            rotation=90,
+            color="C1",
+            fontdict={"fontsize": 16},
+        )
+    # Add Horizontal line at to the redshifts of MgII
+    for z in MAP_z_mgiis:
+        ax.vlines(
+            [
+                (1 + z) * voigt_mgii.transition_wavelengths[0] * 1e8 / (1 + z_qso),
+                (1 + z) * voigt_mgii.transition_wavelengths[1] * 1e8 / (1 + z_qso),
+            ],
+            -1,
+            5,
+            color="C2",
+            ls="--",
+            lw=1,
+        )
+        # Add text to the redshifts of MgII
+        for i in range(1):
+            ax.text(
+                (1 + z) * voigt_mgii.transition_wavelengths[i] * 1e8 / (1 + z_qso),
+                3.5,
+                "z_mgii={:.3g}".format(z),
+                rotation=90,
+                color="C2",
+                fontdict={"fontsize": 16},
+            )
+    # Add Horizontal line at to the redshifts of CIV
+    for z in MAP_z_civ:
+        ax.vlines(
+            [
+                (1 + z) * voigt_civ.transition_wavelengths[0] * 1e8 / (1 + z_qso),
+                (1 + z) * voigt_civ.transition_wavelengths[1] * 1e8 / (1 + z_qso),
+            ],
+            -1,
+            5,
+            color="C4",
+            ls="--",
+            lw=1,
+        )
+        # Add text to the redshifts of CIV
+        for i in range(1):
+            ax.text(
+                (1 + z) * voigt_civ.transition_wavelengths[i] * 1e8 / (1 + z_qso),
+                3.5,
+                "z_civ={:.3g}".format(z),
+                rotation=90,
+                color="C4",
+                fontdict={"fontsize": 16},
+            )
+
+    return ax
 
 
 ########################### Plotting End #######################################
