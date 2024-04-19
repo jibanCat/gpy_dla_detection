@@ -442,7 +442,10 @@ def plot_sample_predictions(
         / lya_gp.params.mgii_2803_wavelength
         - 1,
         # sample_z_dlas.min(),
-        z_qso,
+        (lya_gp.params.lya_wavelength)
+        * (1 + z_qso)
+        / lya_gp.params.mgii_2803_wavelength
+        - 1,
     )
     ax[2].set_ylim(
         lya_gp.mgii_samples.log_nmgii_samples.min(),
@@ -468,7 +471,7 @@ def plot_sample_predictions(
     colours = colours * 5 - 4
     colours[colours < 0] = 0
     # Scatter of posteriors
-    ax[2].scatter(
+    ax[3].scatter(
         lya_gp.sample_z_civs,
         lya_gp.civ_samples.log_nciv_samples,
         c=colours,
@@ -476,7 +479,7 @@ def plot_sample_predictions(
         alpha=0.25,
     )
     # MAP estimate
-    ax[2].scatter(
+    ax[3].scatter(
         MAP_z_civ,
         MAP_log_nciv,
         marker="*",
@@ -486,20 +489,21 @@ def plot_sample_predictions(
     # [min max sample zDLAs] instead of using min max from sample_z_dlas
     # using the zDLAs converted from wavelengths will better reflect the
     # range of wavelengths range in the this_mu plot.
-    ax[2].set_xlim(
+    ax[3].set_xlim(
         (lya_gp.params.lyman_limit - 100)
         * (1 + z_qso)
         / lya_gp.params.civ_1550_wavelength
         - 1,
         # sample_z_dlas.min(),
-        z_qso,
+        (lya_gp.params.lya_wavelength) * (1 + z_qso) / lya_gp.params.civ_1550_wavelength
+        - 1,
     )
-    ax[2].set_ylim(
+    ax[3].set_ylim(
         lya_gp.civ_samples.log_nciv_samples.min(),
         lya_gp.civ_samples.log_nciv_samples.max(),
     )
-    ax[2].set_xlabel(r"$z_{CIV}$")
-    ax[2].set_ylabel(r"$log N_{CIV}$")
+    ax[3].set_xlabel(r"$z_{CIV}$")
+    ax[3].set_ylabel(r"$log N_{CIV}$")
 
     # You want the first panel has the same range
     ax[0].set_xlim(
@@ -560,13 +564,6 @@ def plot_prediction_extended_spectrum(
     this_rest_wavelengths = this_rest_wavelengths[ind]
     abs_mu = abs_mu[ind]
 
-    # Only plot the spectrum within the search range
-    this_rest_wavelengths = lya_gp.x
-    ind = this_rest_wavelengths < lya_gp.params.lya_wavelength
-
-    this_rest_wavelengths = this_rest_wavelengths[ind]
-    lya_mu = lya_mu[ind]
-
     fig, ax = plt.subplots(1, 1, figsize=(16, 5))
 
     # Spectrum space
@@ -585,7 +582,7 @@ def plot_prediction_extended_spectrum(
     # Model with the MAP values
     ax.plot(
         this_rest_wavelengths,
-        lya_mu,
+        abs_mu,
         label=r"$\mathcal{M}$" + "LLS({i}) MgII({j}) CIV({k})".format(i=i, j=j, k=k),
         color="red",
         # lw=2,
@@ -1114,10 +1111,10 @@ def main(
     # Plot the sample predictions
     print("[Info] Plotting the sample predictions ...")
     plot_sample_predictions(
-        nth_lya,
         lya_gp,
         gp,
         z_qso,
+        log_posteriors,
     )
     plt.savefig(os.path.join(img_dir, "sample_predictions.png"), dpi=150, format="png")
     plt.clf()
@@ -1125,11 +1122,11 @@ def main(
 
     # Plot the extended spectrum prediction
     plot_prediction_extended_spectrum(
-        nth_lya,
         lya_gp,
         gp,
         rest_wavelengths,
         flux,
+        log_posteriors,
     )
     plt.savefig(
         os.path.join(img_dir, "extended_predictions.png"), dpi=150, format="png"
@@ -1140,18 +1137,27 @@ def main(
     # Save the basic information of the LLs detection run:
     with open(os.path.join(img_dir, "LLS_detection_info.txt"), "w") as f:
         f.write("Spectrum: {}\n".format(filename))
-        f.write("Max Lya Absorbers: {}\n".format(max_Lya))
+        f.write("Max LLS, MgII, CIV: {}, {}, {}\n".format(max_lls, max_mgii, max_civ))
         f.write("Number of Lya Series Lines: {}\n".format(num_lines))
         f.write("LLS Sample H5: {}\n".format(lls_sample_h5))
+        f.write("MgII Sample H5: {}\n".format(mgii_sample_h5))
+        f.write("CIV Sample H5: {}\n".format(civ_sample_h5))
         f.write("Processed File: {}\n".format(os.path.join(img_dir, "processed.h5")))
         # Number of LLS samples used
-        f.write("Number of LLS Samples: {}\n".format(len(samples_log_nhis)))
+        f.write("Number of Samples: {}\n".format(len(samples_log_nhis)))
 
         # Detected number of absorbers and model posteriors, and the redshifts and nhis
-        f.write("Detected Number of Absorbers: {}\n".format(nth_lya))
-        f.write("Model Posteriors: {}\n".format(model_posteriors))
-        f.write("MAP z_lyas: {}\n".format(map_z_dlas))
-        f.write("MAP log_nhis: {}\n".format(map_log_nhis))
+        f.write(
+            "Detected Number of Absorbers: LLS {}, MgII {}, CIV {}\n".format(i, j, k)
+        )
+        f.write("Model Posteriors: \n{}\n".format(model_posteriors))
+        f.write("Max Model Posteriors: {}\n".format(np.nanmax(model_posteriors)))
+        f.write("MAP z_lyas: {}\n".format(MAP_z_lya))
+        f.write("MAP log_nhis: {}\n".format(MAP_log_nhi))
+        f.write("MAP z_mgiis: {}\n".format(MAP_z_mgiis))
+        f.write("MAP log_nmgii: {}\n".format(MAP_log_nmgii))
+        f.write("MAP z_civs: {}\n".format(MAP_z_civ))
+        f.write("MAP log_nciv: {}\n".format(MAP_log_nciv))
 
         # Time taken for the detection
         f.write("Time Taken: {:.4g} seconds\n".format(time.time() - tt))
@@ -1171,10 +1177,22 @@ if __name__ == "__main__":
         help="The index of the spectrum to be analyzed.",
     )
     parser.add_argument(
-        "--max_Lya",
+        "--max_lls",
         type=int,
         default=4,
-        help="The maximum number of Lya absorbers to search.",
+        help="The maximum number of LLS absorbers to search.",
+    )
+    parser.add_argument(
+        "--max_mgii",
+        type=int,
+        default=4,
+        help="The maximum number of MgII absorbers to search.",
+    )
+    parser.add_argument(
+        "--max_civ",
+        type=int,
+        default=4,
+        help="The maximum number of CIV absorbers to search.",
     )
     parser.add_argument(
         "--num_lines",
@@ -1194,7 +1212,29 @@ if __name__ == "__main__":
         default="data/dr12q/processed/lls_samples.h5",
         help="The file containing the LLS samples.",
     )
+    parser.add_argument(
+        "--mgii_sample_h5",
+        type=str,
+        default="data/dr12q/processed/mgii_samples.h5",
+        help="The file containing the MgII samples.",
+    )
+    parser.add_argument(
+        "--civ_sample_h5",
+        type=str,
+        default="data/dr12q/processed/civ_samples.h5",
+        help="The file containing the CIV samples.",
+    )
     args = parser.parse_args()
 
-    main(args.nspec, args.max_Lya, args.num_lines, args.img_dir, args.lls_sample_h5)
-    # example: python examples/gp_find_lls.py --nspec 0 --max_Lya 4 --num_lines 4 --img_dir images-lls/ --lls_sample_h5 data/dr12q/processed/lls_samples.h5
+    main(
+        args.nspec,
+        args.max_lls,
+        args.max_mgii,
+        args.max_civ,
+        args.num_lines,
+        args.img_dir,
+        args.lls_sample_h5,
+        args.mgii_sample_h5,
+        args.civ_sample_h5,
+    )
+    # example: python examples/gp_find_lls.py --nspec 0 --max_lls 2 --max_mgii 2 --max_civ 2 --num_lines 4 --img_dir images-lls/ --lls_sample_h5 data/dr12q/processed/lls_samples.h5 --mgii_sample_h5 data/dr12q/processed/mgii_samples.h5 --civ_sample_h5 data/dr12q/processed/civ_samples.h5
