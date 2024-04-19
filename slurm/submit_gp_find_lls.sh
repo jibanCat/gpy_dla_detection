@@ -4,12 +4,12 @@
 
 # Example usage of this script:
 # NSPEC=10
-# sbatch --export=ALL,NSPEC=$NSPEC,MAX_LYA=5,MAX_MGII=5,MAX_CIV=5,NUM_LINES=4,IMG_DIR="images-lls/",LLS_SAMPLE_H5="data/dr12q/processed/lls_samples.h5",MGII_SAMPLE_H5="data/dr12q/processed/mgii_samples.h5",CIV_SAMPLE_H5="data/dr12q/processed/civ_samples.h5" \
+# sbatch --export=ALL,NSPEC=$NSPEC,MAX_LYA=5,MAX_MGII=5,MAX_CIV=5,NUM_LINES=4,IMG_DIR="images-lls-metals/",LLS_SAMPLE_H5="data/dr12q/processed/hi_samples.h5",MGII_SAMPLE_H5="data/dr12q/processed/mgii_samples.h5",CIV_SAMPLE_H5="data/dr12q/processed/civ_samples.h5" your_slurm_script.sh
 
 # Example loop to submit multiple jobs with different NSPEC values:
 # # Loop from 0 to 1000
 # for NSPEC in {0..1000}; do
-#   sbatch --export=ALL,NSPEC=$NSPEC,MAX_LYA=5,MAX_MGII=5,MAX_CIV=5,NUM_LINES=4,IMG_DIR="images-lls/",LLS_SAMPLE_H5="data/dr12q/processed/lls_samples.h5",MGII_SAMPLE_H5="data/dr12q/processed/mgii_samples.h5",CIV_SAMPLE_H5="data/dr12q/processed/civ_samples.h5" \
+#   sbatch --export=ALL,NSPEC=$NSPEC,MAX_LYA=5,MAX_MGII=5,MAX_CIV=5,NUM_LINES=4,IMG_DIR="images-lls-metals/",LLS_SAMPLE_H5="data/dr12q/processed/hi_samples.h5",MGII_SAMPLE_H5="data/dr12q/processed/mgii_samples.h5",CIV_SAMPLE_H5="data/dr12q/processed/civ_samples.h5" \
 #          --output="gp_find_lls_nspec-${NSPEC}-%J.out" \
 #          your_slurm_script.sh
 # done

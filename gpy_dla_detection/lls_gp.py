@@ -440,10 +440,6 @@ class LLSGPDR12(DLAGP):
         - absorption: The absorption profile for the given parameters.
         """
         # check if the absorption profile is already computed
-        print(
-            "[Debug] Query the cache for LLS absorption profile",
-            (self.lls_label, z_lls, nhis),
-        )
         if (self.lls_label, z_lls, nhis) in self.absorption_cache:
             return self.absorption_cache[(self.lls_label, z_lls, nhis)]
 
