@@ -564,7 +564,7 @@ def plot_prediction_extended_spectrum(
     this_rest_wavelengths = this_rest_wavelengths[ind]
     abs_mu = abs_mu[ind]
 
-    fig, ax = plt.subplots(1, 1, figsize=(16, 5))
+    fig, ax = plt.subplots(1, 1, figsize=(18, 5))
 
     # Spectrum space
     ax.plot(
@@ -598,7 +598,7 @@ def plot_prediction_extended_spectrum(
     # Adding MAP lines to the plot
     ax = add_MAP_vlines(lya_gp, MAP_z_lya, MAP_z_mgiis, MAP_z_civ, ax, lya_gp.z_qso)
 
-    ax.set_xlim(750, 1415)
+    ax.set_xlim(750, 1550)
     ax.set_ylim(-1, 5)
     plt.legend()
     plt.xlabel("Rest-frame Wavelengths [$\AA$]")
