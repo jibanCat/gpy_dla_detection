@@ -653,24 +653,62 @@ def add_MAP_vlines(
             lw=1,
         )
         # Add text to the redshifts of LLS
-        labels = [r"$Ly\alpha$", r"$Ly\beta$", r"$Ly\gamma$", r"$Ly\infty$"]
+        labels = [
+            r"$\leftarrow Ly\alpha$",
+            r"$\leftarrow Ly\beta$",
+            r"$\leftarrow Ly\gamma$",
+            r"$\leftarrow Ly\infty$",
+        ]
         for i in range(3):
             ax.text(
                 (1 + z) * voigt.transition_wavelengths[i] * 1e8 / (1 + z_qso),
                 3.5,
-                labels[i] + ": z_lls={:.3g}".format(z),
+                labels[i] + ": {:.3g}".format(z),
                 rotation=90,
                 color="C1",
                 fontdict={"fontsize": 16},
             )
+
         ax.text(
             (1 + z) * lya_gp.params.lyman_limit / (1 + z_qso),
-            3.5,
-            labels[-1] + ": z_lls={:.3g}".format(z),
+            2.5,
+            labels[-1] + ": {:.3g}".format(z),
             rotation=90,
-            color="C1",
+            color="C3",
             fontdict={"fontsize": 16},
         )
+
+        # Add lines for the Metalicity of the LLS
+        metal_lines = [1397.61, 1549.48, 1908.734, 2799.117]
+        ax.vlines(
+            [
+                (1 + z) * metal_lines[0] / (1 + z_qso),
+                (1 + z) * metal_lines[1] / (1 + z_qso),
+                # (1 + z) * metal_lines[2] / (1 + z_qso),
+                # (1 + z) * metal_lines[3] / (1 + z_qso),
+            ],
+            -1,
+            5,
+            color="C3",
+            ls="--",
+            lw=1,
+        )
+        labels = [
+            r"$\leftarrow SiIV$",
+            r"$\leftarrow CIV$",
+            # r"$\leftarrow CIII$",
+            # r"$\leftarrow MgII$",
+        ]
+        for i in range(2):
+            ax.text(
+                (1 + z) * metal_lines[i] / (1 + z_qso),
+                2.5,
+                labels[i] + ": {:.3g}".format(z),
+                rotation=90,
+                color="C4",
+                fontdict={"fontsize": 16},
+            )
+
     # Add Horizontal line at to the redshifts of MgII
     for z in MAP_z_mgiis:
         ax.vlines(
@@ -688,8 +726,8 @@ def add_MAP_vlines(
         for i in range(1):
             ax.text(
                 (1 + z) * voigt_mgii.transition_wavelengths[i] * 1e8 / (1 + z_qso),
-                3.5,
-                "z_mgii={:.3g}".format(z),
+                2.5,
+                "$\leftarrow$" + " MgII: {:.3g}".format(z),
                 rotation=90,
                 color="C2",
                 fontdict={"fontsize": 16},
@@ -711,8 +749,8 @@ def add_MAP_vlines(
         for i in range(1):
             ax.text(
                 (1 + z) * voigt_civ.transition_wavelengths[i] * 1e8 / (1 + z_qso),
-                3.5,
-                "z_civ={:.3g}".format(z),
+                2.5,
+                "$\leftarrow$" + "CIV: {:.3g}".format(z),
                 rotation=90,
                 color="C4",
                 fontdict={"fontsize": 16},
@@ -783,6 +821,8 @@ def save_processed_file(
         MAP_log_nciv,
         MAP_z_civ,
     ) = lya_gp.maximum_a_posteriori(log_posteriors)
+    # Get the indices of the maximum log posterior
+    i, j, k = np.unravel_index(np.nanargmax(log_posteriors), log_posteriors.shape)
 
     # write into HDF5 file
     with h5py.File(filename, "w") as f:
