@@ -570,7 +570,7 @@ def plot_prediction_extended_spectrum(
     this_rest_wavelengths = this_rest_wavelengths[ind]
     abs_mu = abs_mu[ind]
 
-    fig, ax = plt.subplots(1, 1, figsize=(18, 5))
+    fig, ax = plt.subplots(1, 1, figsize=(25, 8))
 
     # Spectrum space
     ax.plot(
@@ -591,7 +591,7 @@ def plot_prediction_extended_spectrum(
         abs_mu,
         label=r"$\mathcal{M}$"
         + "LLS({i}) MgII({j}) CIV({k})".format(i=i, j=j, k=k)
-        + " Maximum Posterior {}".format(model_posteriors[i, j, k]),
+        + " Maximum Posterior {:.2g}".format(model_posteriors[i, j, k]),
         color="red",
         # lw=2,
     )
@@ -607,10 +607,10 @@ def plot_prediction_extended_spectrum(
     ax = add_MAP_vlines(lya_gp, MAP_z_lya, MAP_z_mgiis, MAP_z_civ, ax, lya_gp.z_qso)
 
     ax.set_xlim(750, 1550)
-    ax.set_ylim(-1, 5)
+    ax.set_ylim(-2, 5)
     plt.legend()
-    plt.xlabel("Rest-frame Wavelengths [$\AA$]")
-    plt.ylabel("Normalized Flux")
+    plt.xlabel("Rest-frame Wavelengths [$\AA$]", fontdict={"fontsize": 16})
+    plt.ylabel("Normalized Flux", fontdict={"fontsize": 16})
     plt.tight_layout()
 
     # Add the observed wavelengths to the top x-axis
@@ -622,7 +622,7 @@ def plot_prediction_extended_spectrum(
         ["{:.0f}".format(tick * (1 + lya_gp.z_qso)) for tick in ax.get_xticks()],
     )
     ax2.set_xlim(ax.get_xlim())
-    ax2.set_xlabel("Observed-frame Wavelengths [$\AA$]")
+    ax2.set_xlabel("Observed-frame Wavelengths [$\AA$]", fontdict={"fontsize": 16})
     return fig, ax
 
 
@@ -660,11 +660,11 @@ def add_MAP_vlines(
                 # (1 + z) * voigt.transition_wavelengths[3] * 1e8 / (1 + z_qso),
                 (1 + z) * lya_gp.params.lyman_limit / (1 + z_qso),
             ],
-            -1,
+            -2,
             5,
             color="C1",
             ls="--",
-            lw=1,
+            lw=2,
         )
         # Add text to the redshifts of LLS
         labels = [
@@ -676,8 +676,8 @@ def add_MAP_vlines(
         for i in range(3):
             ax.text(
                 (1 + z) * voigt.transition_wavelengths[i] * 1e8 / (1 + z_qso),
-                3.5,
-                labels[i] + "z={:.3g}".format(z) + " ln={:.3g}".format(n),
+                2.5,
+                labels[i] + ": z={:.3g}".format(z) + " ln={:.3g}".format(n),
                 rotation=90,
                 color="C1",
                 fontdict={"fontsize": 16},
@@ -685,8 +685,8 @@ def add_MAP_vlines(
 
         ax.text(
             (1 + z) * lya_gp.params.lyman_limit / (1 + z_qso),
-            2.5,
-            labels[-1] + "z={:.3g}".format(z) + " ln={:.3g}".format(n),
+            2.0,
+            labels[-1] + ": z={:.3g}".format(z) + " ln={:.3g}".format(n),
             rotation=90,
             color="C3",
             fontdict={"fontsize": 16},
@@ -701,11 +701,11 @@ def add_MAP_vlines(
                 # (1 + z) * metal_lines[2] / (1 + z_qso),
                 # (1 + z) * metal_lines[3] / (1 + z_qso),
             ],
-            -1,
+            -2,
             5,
-            color="C3",
-            ls="--",
-            lw=1,
+            color="C4",
+            ls="dashdot",
+            lw=2,
         )
         labels = [
             r"$\leftarrow SiIV$",
@@ -730,11 +730,11 @@ def add_MAP_vlines(
                 (1 + z) * voigt_mgii.transition_wavelengths[0] * 1e8 / (1 + z_qso),
                 (1 + z) * voigt_mgii.transition_wavelengths[1] * 1e8 / (1 + z_qso),
             ],
-            -1,
+            -2,
             5,
             color="C2",
             ls="--",
-            lw=1,
+            lw=2,
         )
         # Add text to the redshifts of MgII
         for i in range(1):
@@ -753,11 +753,11 @@ def add_MAP_vlines(
                 (1 + z) * voigt_civ.transition_wavelengths[0] * 1e8 / (1 + z_qso),
                 (1 + z) * voigt_civ.transition_wavelengths[1] * 1e8 / (1 + z_qso),
             ],
-            -1,
+            -2,
             5,
             color="C4",
             ls="--",
-            lw=1,
+            lw=2,
         )
         # Add text to the redshifts of CIV
         for i in range(1):
@@ -769,6 +769,53 @@ def add_MAP_vlines(
                 color="C4",
                 fontdict={"fontsize": 16},
             )
+
+    return ax
+
+
+def add_Fumagalli_vlines(ax: plt.Axes, z_lls: float, z_qso: float):
+    """
+    Adds vertical lines to the plot for the redshifts of absorbers based on Fumagalli et al. (2011).
+
+    Parameters:
+        ax (Axes): The matplotlib Axes object to add the lines to.
+        z_lls (float): The redshift of the Lyman Limit System (LLS) absorber.
+    """
+    # Fumagalli et al. (2020) absorber redshifts
+    # the redshift of Lyman limit systems
+    ax.vlines(
+        [
+            (1 + z_lls) * LLSParameters().lya_wavelength / (1 + z_qso),
+            (1 + z_lls) * LLSParameters().lyman_limit / (1 + z_qso),
+        ],
+        -2,
+        5,
+        color="C4",
+        ls="dotted",
+        lw=2,
+    )
+    # Add text to the redshifts of LLS
+    labels = [
+        r"$\leftarrow$ (F) $Ly\alpha$",
+        r"$\leftarrow$ (F) $Ly\infty$",
+    ]
+    ax.text(
+        (1 + z_lls) * LLSParameters().lya_wavelength / (1 + z_qso),
+        -1.9,
+        labels[0] + ": z={:.3g}".format(z_lls),
+        rotation=270,
+        color="C5",
+        fontdict={"fontsize": 16},
+    )
+
+    ax.text(
+        (1 + z_lls) * LLSParameters().lyman_limit / (1 + z_qso),
+        -1.9,
+        labels[-1] + ": z={:.3g}".format(z_lls),
+        rotation=270,
+        color="C5",
+        fontdict={"fontsize": 16},
+    )
 
     return ax
 
