@@ -1146,9 +1146,10 @@ class LLSGPDR12(DLAGP):
             ) * self.params.civ_1548_wavelength / self.params.lya_wavelength - 1
             all_zs = np.concatenate([all_zs, all_z_civs], axis=0)
 
-        # Make NaNs to those samples that are too close
+        # Make NaNs to those samples that are too close:
+        # Because these are doublets, so we need to consider the separation to be larger
         ind = np.any(
-            np.diff(np.sort(all_zs, axis=0), axis=0) < self.min_z_separation, axis=0
+            np.diff(np.sort(all_zs, axis=0), axis=0) < (2 * self.min_z_separation), axis=0
         )
         self.sample_log_likelihoods[ind, num_lls, num_mgii, num_civ] = np.nan
 

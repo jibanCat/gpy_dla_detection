@@ -549,6 +549,12 @@ def plot_prediction_extended_spectrum(
         MAP_z_civ,
     ) = lya_gp.maximum_a_posteriori(log_posteriors)
 
+    # Maximum posterior
+    max_log_posterior = np.nanmax(log_posteriors)
+
+    model_posteriors = np.exp(log_posteriors - max_log_posterior)
+    model_posteriors = model_posteriors / np.nansum(model_posteriors)
+
     # feed in MAP values and get the absorption profile given (z_dlas, nhis)
     abs_lls = lya_gp.this_lls_gp(MAP_z_lya, 10**MAP_log_nhi)
     abs_mgii = lya_gp.this_mgii_gp(MAP_z_mgiis, 10**MAP_log_nmgii)
@@ -583,7 +589,9 @@ def plot_prediction_extended_spectrum(
     ax.plot(
         this_rest_wavelengths,
         abs_mu,
-        label=r"$\mathcal{M}$" + "LLS({i}) MgII({j}) CIV({k})".format(i=i, j=j, k=k),
+        label=r"$\mathcal{M}$"
+        + "LLS({i}) MgII({j}) CIV({k})".format(i=i, j=j, k=k)
+        + " Maximum Posterior {}".format(model_posteriors[i, j, k]),
         color="red",
         # lw=2,
     )
@@ -621,8 +629,11 @@ def plot_prediction_extended_spectrum(
 def add_MAP_vlines(
     lya_gp: LLSGPDR12,
     MAP_z_lya: np.ndarray,
+    MAP_log_nhi: np.ndarray,
     MAP_z_mgiis: np.ndarray,
+    MAP_log_nmgii: np.ndarray,
     MAP_z_civ: np.ndarray,
+    MAP_log_nciv: np.ndarray,
     ax: plt.Axes,
     z_qso: float,
 ):
@@ -631,12 +642,15 @@ def add_MAP_vlines(
 
     Parameters:
         MAP_z_lya (float): The MAP redshift of the Lyman Alpha absor
+        MAP_log_nhi (float): The MAP log column density of the Lyman Alpha absorser.
         MAP_z_mgiis (float): The MAP redshift of the MgII absorber.
+        MAP_log_nmgii (float): The MAP log column density of the MgII absorber.
         MAP_z_civ (float): The MAP redshift of the CIV absorber.
+        MAP_log_nciv (float): The MAP log column density of the CIV absorber.
         ax (Axes): The matplotlib Axes object to add the lines to.
     """
-    # Add Horizontal line at to the redshifts of LLS
-    for z in MAP_z_lya:
+    # Add Vertical line at to the redshifts of LLS
+    for z, n in zip(MAP_z_lya, MAP_log_nhi):
         # For all ly series lines
         ax.vlines(
             [
@@ -663,7 +677,7 @@ def add_MAP_vlines(
             ax.text(
                 (1 + z) * voigt.transition_wavelengths[i] * 1e8 / (1 + z_qso),
                 3.5,
-                labels[i] + ": {:.3g}".format(z),
+                labels[i] + "z={:.3g}".format(z) + " ln={:.3g}".format(n),
                 rotation=90,
                 color="C1",
                 fontdict={"fontsize": 16},
@@ -672,7 +686,7 @@ def add_MAP_vlines(
         ax.text(
             (1 + z) * lya_gp.params.lyman_limit / (1 + z_qso),
             2.5,
-            labels[-1] + ": {:.3g}".format(z),
+            labels[-1] + "z={:.3g}".format(z) + " ln={:.3g}".format(n),
             rotation=90,
             color="C3",
             fontdict={"fontsize": 16},
@@ -709,8 +723,8 @@ def add_MAP_vlines(
                 fontdict={"fontsize": 16},
             )
 
-    # Add Horizontal line at to the redshifts of MgII
-    for z in MAP_z_mgiis:
+    # Add Vertical line at to the redshifts of MgII
+    for z, n in zip(MAP_z_mgiis, MAP_log_nmgii):
         ax.vlines(
             [
                 (1 + z) * voigt_mgii.transition_wavelengths[0] * 1e8 / (1 + z_qso),
@@ -727,13 +741,13 @@ def add_MAP_vlines(
             ax.text(
                 (1 + z) * voigt_mgii.transition_wavelengths[i] * 1e8 / (1 + z_qso),
                 2.5,
-                "$\leftarrow$" + " MgII: {:.3g}".format(z),
+                "$\leftarrow$" + " MgII: z={:.3g}".format(z) + " ln={:.3g}".format(n),
                 rotation=90,
                 color="C2",
                 fontdict={"fontsize": 16},
             )
-    # Add Horizontal line at to the redshifts of CIV
-    for z in MAP_z_civ:
+    # Add Vertical line at to the redshifts of CIV
+    for z, n in zip(MAP_z_civ, MAP_log_nciv):
         ax.vlines(
             [
                 (1 + z) * voigt_civ.transition_wavelengths[0] * 1e8 / (1 + z_qso),
@@ -750,7 +764,7 @@ def add_MAP_vlines(
             ax.text(
                 (1 + z) * voigt_civ.transition_wavelengths[i] * 1e8 / (1 + z_qso),
                 2.5,
-                "$\leftarrow$" + "CIV: {:.3g}".format(z),
+                "$\leftarrow$" + "CIV: z={:.3g}".format(z) + " lnN={:.3g}".format(n),
                 rotation=90,
                 color="C4",
                 fontdict={"fontsize": 16},
@@ -1156,7 +1170,7 @@ def main(
         z_qso,
         log_posteriors,
     )
-    plt.savefig(os.path.join(img_dir, "sample_predictions.png"), dpi=150, format="png")
+    plt.savefig(os.path.join(img_dir, "fsample_predictions.png"), dpi=150, format="png")
     plt.clf()
     plt.close()
 
