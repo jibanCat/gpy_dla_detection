@@ -524,6 +524,7 @@ def plot_prediction_extended_spectrum(
     rest_wavelengths: np.ndarray,
     flux: np.ndarray,
     log_posteriors: np.ndarray,
+    z_lls_fumagalli: float,
 ):
     """
     Plots the extended spectrum prediction for a quasar, incorporating the effects of Lyman Alpha absorbers.
@@ -534,6 +535,8 @@ def plot_prediction_extended_spectrum(
         gp (NullGPDR12): An instance of NullGPDR12 representing the GP model without LLS.
         rest_wavelengths (np.ndarray): Array of rest wavelengths for the quasar spectrum.
         flux (np.ndarray): Array of flux values for the quasar spectrum.
+        log_posteriors (np.ndarray): Array of log posteriors for the absorber searches.
+        z_lls_fumagalli (float): The redshift of the Lyman Limit System from Fumagalli et al. (2011).
     """
     # MAP absobers:
     i, j, k = np.unravel_index(np.nanargmax(log_posteriors), log_posteriors.shape)
@@ -615,6 +618,7 @@ def plot_prediction_extended_spectrum(
         ax,
         lya_gp.z_qso,
     )
+    ax = add_Fumagalli_vlines(ax, z_lls_fumagalli, lya_gp.z_qso)
 
     ax.set_xlim(750, 1550)
     ax.set_ylim(-2, 5)
@@ -1238,6 +1242,7 @@ def main(
         rest_wavelengths,
         flux,
         log_posteriors,
+        z_lls_fumagalli=loader.LLS_redshift[nspec],
     )
     plt.savefig(
         os.path.join(img_dir, "extended_predictions.png"), dpi=150, format="png"
