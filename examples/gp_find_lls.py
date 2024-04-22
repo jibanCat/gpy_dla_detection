@@ -604,7 +604,17 @@ def plot_prediction_extended_spectrum(
         alpha=0.3,
     )
     # Adding MAP lines to the plot
-    ax = add_MAP_vlines(lya_gp, MAP_z_lya, MAP_z_mgiis, MAP_z_civ, ax, lya_gp.z_qso)
+    ax = add_MAP_vlines(
+        lya_gp,
+        MAP_z_lya,
+        MAP_log_nhi,
+        MAP_z_mgiis,
+        MAP_log_nmgii,
+        MAP_z_civ,
+        MAP_log_nciv,
+        ax,
+        lya_gp.z_qso,
+    )
 
     ax.set_xlim(750, 1550)
     ax.set_ylim(-2, 5)
