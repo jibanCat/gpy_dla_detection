@@ -618,7 +618,8 @@ def plot_prediction_extended_spectrum(
         ax,
         lya_gp.z_qso,
     )
-    ax = add_Fumagalli_vlines(ax, z_lls_fumagalli, lya_gp.z_qso)
+    if z_lls_fumagalli > 0.0:
+        ax = add_Fumagalli_vlines(ax, z_lls_fumagalli, lya_gp.z_qso)
 
     ax.set_xlim(750, 1550)
     ax.set_ylim(-2, 5)
