@@ -12,6 +12,7 @@ from gpy_dla_detection.cddf_samples import (
     generate_dla_samples,
     generate_civ_samples,
     generate_mgii_samples,
+    generate_weak_lls_samples,
 )
 
 
@@ -38,6 +39,10 @@ def generate_vanilla_run_samples(
     mgii_samples, mgii_halton_sequence = generate_mgii_samples(
         num_samples=num_samples, resolution=resolution
     )
+    # Alternative model for the CDDF samples
+    wlls_samples, wlls_halton_sequence = generate_weak_lls_samples(
+        num_samples=num_samples, resolution=resolution
+    )
 
     # base directory
     base_dir = os.path.join("data", "dr12q", "processed")
@@ -52,3 +57,6 @@ def generate_vanilla_run_samples(
     with h5py.File(os.path.join(base_dir, "mgii_samples.h5"), "w") as f:
         f.create_dataset("halton_sequence", data=mgii_halton_sequence)
         f.create_dataset("samples_log_mgiis", data=mgii_samples)
+    with h5py.File(os.path.join(base_dir, "wlls_samples.h5"), "w") as f:
+        f.create_dataset("halton_sequence", data=wlls_halton_sequence)
+        f.create_dataset("samples_log_nhis", data=wlls_samples)

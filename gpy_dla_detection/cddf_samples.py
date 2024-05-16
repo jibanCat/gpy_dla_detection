@@ -75,6 +75,24 @@ def dla_normalized_pdf(log_n):
     return unnormalized_pdf(log_n) / Z
 
 
+def lls_normalized_pdf(log_n):
+    """
+    Compute the normalized probability density function (PDF) for the LLS CDDF.
+
+    Parameters:
+    - log_n: The column density in log10(N_HI) space.
+
+    Returns:
+    - pdf: The normalized PDF at the given column density.
+    """
+    # CDDF for LLS
+    unnormalized_pdf = lambda log_nhi: 10 ** log_cddf_lls(log_nhi)
+
+    Z = quad(unnormalized_pdf, 17.2, 19.0)[0]
+
+    return unnormalized_pdf(log_n) / Z
+
+
 def mgii_normalized_pdf(log_n):
     """
     Compute the normalized probability density function (PDF) for the MgII CDDF.
@@ -170,6 +188,34 @@ def generate_dla_samples(num_samples: int, resolution: int = 10000):
     """
     # Define the domain of the DLA CDDF
     domain = (17.5, 23.0)
+    sampler = Halton(
+        d=2,  # dimension of parameter space
+        scramble=False,
+    )
+    halton_sequence = sampler.random(num_samples)
+    # Generate samples using inverse transform sampling
+    samples = inverse_transform_sampling(
+        dla_normalized_pdf,
+        domain,
+        halton_sequence[:, 0],
+        resolution,
+    )
+
+    return samples, halton_sequence[:, 1]
+
+
+def generate_weak_lls_samples(num_samples: int, resolution: int = 10000):
+    """
+    Generate samples from the LLS CDDF using inverse transform sampling.
+
+    Parameters:
+    - num_samples: The number of samples to generate.
+
+    Returns:
+    - samples: A NumPy array of samples from the LLS CDDF.
+    """
+    # Define the domain of weaker than the LLS CDDF
+    domain = (17.2, 17.5)
     sampler = Halton(
         d=2,  # dimension of parameter space
         scramble=False,
