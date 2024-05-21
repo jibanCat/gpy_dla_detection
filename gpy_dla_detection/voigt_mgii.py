@@ -2,8 +2,8 @@
 voigt.py : python version of the Voigt profile for 
     Reza's voigt.c file, including:
 
-- A doublet CIV absorption line
-- parameterized using : (1) z_civ, (2) nciv;
+- A doublet MgII absorption line
+- parameterized using : (1) z_mgii, (2) nmgii;
 - input wavelengths: observed wavelengths
 
 Note:
@@ -13,31 +13,31 @@ import numpy as np
 from scipy.special import wofz
 
 # physical constants in cgs
-c: float = 2.99792458e10
+c: float = 2.99792458e10  # speed of light          cm s⁻¹
 k: float = 1.38064852e-16  # Boltzmann constant      erg K⁻¹
 m_p: float = 1.672621898e-24  # proton mass             g
 m_e: float = 9.10938356e-28  # electron mass           g
 e: float = 4.803204672997660e-10  # elementary charge       statC
 
-# CIV doublet
+# MgII doublet
 transition_wavelengths: np.ndarray = np.array(
     [  # lambda_ul, cm
-        1.5482040e-05,
-        1.5507810e-05,
+        2796.3542699e-8,
+        2803.5314853e-8,
     ]
 )
 
 oscillator_strengths: np.ndarray = np.array(
     [  # oscillator strengths f_ul, dimensionless
-        0.189900,
-        0.094750,
+        0.6155,
+        0.3058,
     ]
 )
 
 Gammas: np.ndarray = np.array(
     [  # transition rates s⁻¹
-        2.643e08,
-        2.628e08,
+        2.68e8,
+        2.66e8,
     ]
 )
 
@@ -45,8 +45,8 @@ Gammas: np.ndarray = np.array(
 #        M_PI * e * e * oscillator_strengths[i] * transition_wavelengths[i] / (m_e * c)
 leading_constants: np.ndarray = np.array(
     [  # cm²
-        7.802895118381213e-08,
-        3.899701297867750e-08,
+        4.567963400781244e-07,
+        2.2753346785102732e-07,
     ]
 )
 
@@ -54,8 +54,8 @@ leading_constants: np.ndarray = np.array(
 #   gammas[i] = Gammas[i] * transition_wavelengths[i] / (4 * M_PI);
 gammas: np.ndarray = np.array(
     [
-        3.255002952981575e02,
-        3.243136695286643e02,
+        596.3718302855555,
+        593.4405390190135,
     ]
 )
 
@@ -102,8 +102,8 @@ def Voigt(x: np.ndarray, sigma: float, gamma: float) -> np.ndarray:
 
 def voigt_absorption(
     wavelengths: np.ndarray,
-    nciv: float,
-    z_civ: float,
+    nmgii: float,
+    z_mgii: float,
     sigma: float,
     num_lines: int = 2,
     broadening: bool = True,
@@ -114,8 +114,8 @@ def voigt_absorption(
     Parameters:
     ----
     wavelengths (np.ndarray) : observed wavelengths (Å)
-    nciv (float) : column density of this absorber   (cm⁻²)
-    z_civ (float) : the redshift of this absorber   (dimensionless)
+    nmgii (float) : column density of MgII absorber (cm⁻2)
+    z_mgii (float) : redshift of MgII absorber
 
     raw_profile =
         exp( nhi * ( - leading_constants[j] * Voigt(velocity, sigma, gammas[j] ) )  )
@@ -149,7 +149,7 @@ def voigt_absorption(
     raw_profile = np.empty((num_points,))
 
     # build the multipliers for the relative velocity
-    multipliers = c / (transition_wavelengths[:num_lines] * (1 + z_civ)) / 1e8
+    multipliers = c / (transition_wavelengths[:num_lines] * (1 + z_mgii)) / 1e8
 
     # compute raw Voigt profile
     total = np.empty((num_lines, raw_profile.shape[0]))
@@ -159,7 +159,7 @@ def voigt_absorption(
 
         total[l, :] = -leading_constants[l] * Voigt(velocity, sigma, gammas[l])
 
-    raw_profile[:] = np.exp(np.float64(nciv) * np.nansum(total, axis=0))
+    raw_profile[:] = np.exp(np.float64(nmgii) * np.nansum(total, axis=0))
 
     if broadening:
         # num_points = len(profile)
