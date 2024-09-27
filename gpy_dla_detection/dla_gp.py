@@ -11,7 +11,10 @@ import h5py
 from .set_parameters import Parameters
 from .model_priors import PriorCatalog
 from .null_gp import NullGP
-from .voigt import voigt_absorption
+# from .voigt import voigt_absorption
+from .voigt_fast import VoigtProfile
+
+voigt_absorption = VoigtProfile().compute_voigt_profile
 
 # this could be replaced to DLASamples in the future;
 # I import this is for the convenient of my autocomplete
@@ -46,8 +49,6 @@ class DLAGP(NullGP):
     :param log_beta: log β, the exponent of the effective optical depth in the absorption noise.
     :param prev_tau_0: τ_kim, the scale factor of effective optical depth used in mean-flux suppression.
     :param prev_beta: β_kim, the exponent of the effective optical depth used in mean-flux suppression.
-    :param broadening: whether to implement the SDSS instrumental broadening in the Voigt profile,
-        default is True.
 
     ..Note: MCMC embedded in the class as an instance method.
     """
@@ -372,7 +373,7 @@ class DLAGP(NullGP):
             z_dla=z_dlas[0],
             nhi=nhis[0],
             num_lines=self.params.num_lines,
-            broadening=self.broadening, # the switch for instrumental broadening controlled by instance attr
+            # broadening=self.broadening, # the switch for instrumental broadening controlled by instance attr
         )
 
         # absorption corresponding to other DLAs in multiple DLA samples
@@ -382,7 +383,7 @@ class DLAGP(NullGP):
                 z_dla=z_dlas[j],
                 nhi=nhis[j],
                 num_lines=self.params.num_lines,
-                broadening=self.broadening, # the switch for instrumental broadening controlled by instance attr
+                # broadening=self.broadening, # the switch for instrumental broadening controlled by instance attr
             )
 
         absorption = absorption[mask_ind]
