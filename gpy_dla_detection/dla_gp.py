@@ -97,6 +97,7 @@ def process_batch(
     dla_samples: DLASamplesMAT,
     params: Parameters,
     sample_log_likelihood_k_dlas: callable,
+    min_z_separation: float,  # Add min_z_separation as an argument
 ) -> List[float]:
     """
     Process a batch of samples. For each sample in the batch, this function computes
@@ -110,6 +111,7 @@ def process_batch(
         dla_samples ('DLASamplesMAT'): Object containing the DLA sample catalog.
         params ('Parameters'): Model parameters object.
         sample_log_likelihood_k_dlas (callable): Function to compute log likelihood for each sample.
+        min_z_separation (float): Minimum redshift separation for DLA pairs.
 
     Returns:
         List[float]: List of log likelihoods for each sample in the batch.
@@ -127,6 +129,7 @@ def process_batch(
             dla_samples,
             params,
             sample_log_likelihood_k_dlas,
+            min_z_separation,  # Pass the missing argument
         )
         batch_results.append(result)  # Store the result in the batch result list
 
@@ -398,6 +401,7 @@ class DLAGP(NullGP):
                         self.dla_samples,
                         self.params,
                         self.sample_log_likelihood_k_dlas,
+                        self.min_z_separation,  # Pass the argument here
                     ): batch
                     for batch in batches
                 }
