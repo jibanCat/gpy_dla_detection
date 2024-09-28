@@ -2,8 +2,11 @@
 A GP class for having multiple DLAs intervening in a given slightline. 
 """
 from typing import Tuple, Optional, Callable
+import os
 
 import concurrent.futures
+from concurrent.futures import as_completed
+
 
 import numpy as np
 import scipy.stats as stats
@@ -13,15 +16,17 @@ import h5py
 from .set_parameters import Parameters
 from .model_priors import PriorCatalog
 from .null_gp import NullGP
-# from .voigt import voigt_absorption
-from .voigt_fast import VoigtProfile
+from .voigt import voigt_absorption
+# from .voigt_fast import VoigtProfile
 
-voigt_absorption = VoigtProfile().compute_voigt_profile
+# voigt_absorption = VoigtProfile().compute_voigt_profile
 
 # this could be replaced to DLASamples in the future;
 # I import this is for the convenient of my autocomplete
 from .dla_samples import DLASamplesMAT
 
+# Limit the number of workers to the number of CPU cores
+max_workers = os.cpu_count() * 2
 
 
 def process_sample(
@@ -310,7 +315,7 @@ class DLAGP(NullGP):
 
         for num_dlas in range(max_dlas):  # Iterate from 0 to max_dlas - 1
             # Use a ProcessPoolExecutor to parallelize the loop
-            with concurrent.futures.ProcessPoolExecutor() as executor:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
                 futures = [
                     executor.submit(
                         process_sample,
@@ -325,11 +330,16 @@ class DLAGP(NullGP):
                     )
                     for i in range(self.params.num_dla_samples)
                 ]
-                results = [f.result() for f in futures]
+
+                # Process results as they complete
+                for future in as_completed(futures):
+                    i = futures.index(future)  # Find which task's result it is
+                    result = future.result()  # Get the result for the completed task
+                    sample_log_likelihoods[i, num_dlas] = result
 
             # Store results into sample_log_likelihoods
-            for i, result in enumerate(results):
-                sample_log_likelihoods[i, num_dlas] = result
+            # for i, result in enumerate(results):
+            # sample_log_likelihoods[:, num_dlas] = np.array(results)
 
             # Handle NaN values and resampling logic
             if num_dlas > 0:
