@@ -387,7 +387,7 @@ class DLAGP(NullGP):
 
         for num_dlas in range(max_dlas):  # Iterate from 0 to max_dlas - 1
             # Use a ProcessPoolExecutor to parallelize the loop
-            with concurrent.futures.ThreadPoolExecutor(
+            with concurrent.futures.ProcessPoolExecutor(
                 max_workers=max_workers
             ) as executor:
                 # Submit the tasks for each batch to the thread pool
