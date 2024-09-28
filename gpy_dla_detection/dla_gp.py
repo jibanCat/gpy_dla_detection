@@ -20,10 +20,6 @@ voigt_absorption = VoigtProfile().compute_voigt_profile
 # I import this is for the convenient of my autocomplete
 from .dla_samples import DLASamplesMAT
 
-# the mcmc log posterior function
-import emcee
-from .log_posterior_mcmc import log_posterior
-
 
 class DLAGP(NullGP):
     """
@@ -49,8 +45,6 @@ class DLAGP(NullGP):
     :param log_beta: log β, the exponent of the effective optical depth in the absorption noise.
     :param prev_tau_0: τ_kim, the scale factor of effective optical depth used in mean-flux suppression.
     :param prev_beta: β_kim, the exponent of the effective optical depth used in mean-flux suppression.
-
-    ..Note: MCMC embedded in the class as an instance method.
     """
 
     def __init__(
@@ -224,90 +218,6 @@ class DLAGP(NullGP):
         self.base_sample_inds = base_sample_inds
 
         return log_likelihoods_dla
-
-    def run_mcmc(
-        self,
-        nwalkers: int,
-        kth_dla: int = 1,
-        nsamples: int = 5000,
-        pos: Optional[np.ndarray] = None,
-        skip_initial_state_check:bool=True,
-    ) -> emcee.EnsembleSampler:
-        """
-        An MCMC implementation for marginalizing log likelihood at kth DLA model.
-
-        MCMC should give a more accurate parameter estimation than maximum a
-        posteriori on the QMC samples.
-        """
-        # get the prior range for the zDLA
-        min_z_dla = self.params.min_z_dla(self.this_wavelengths, self.z_qso)
-        max_z_dla = self.params.max_z_dla(self.this_wavelengths, self.z_qso)
-
-        # prior range for logNHI
-        min_log_nhi = self.dla_samples.uniform_min_log_nhi
-        max_log_nhi = self.dla_samples.uniform_max_log_nhi
-
-        # make the pdf function here
-        # uniform component of column density prior
-        u = stats.uniform(loc=self.dla_samples.uniform_min_log_nhi,
-            scale=self.dla_samples.uniform_max_log_nhi - self.dla_samples.uniform_min_log_nhi)
-
-        # directly use the fitted poly values in the Garnett (2017)
-        unnormalized_pdf = lambda nhi: (np.exp(
-            -1.2695 * nhi**2 + 50.863 * nhi -509.33
-        ))
-        Z = quad(unnormalized_pdf, self.dla_samples.fit_min_log_nhi, 25.0)[0] # hard-coded 25.0
-
-        # create the PDF of the mixture between the unifrom distribution and
-        # the distribution fit to the data
-        normalized_pdf = lambda nhi: self.dla_samples.alpha  * (unnormalized_pdf(nhi) / Z
-            ) + (1 - self.dla_samples.alpha) * (u.pdf(nhi))
-
-        sampler = emcee.EnsembleSampler(
-            nwalkers,
-            kth_dla * 2,
-            log_posterior,
-            args=(
-                self.this_wavelengths,
-                self.y,
-                self.v,
-                self.z_qso,
-                min_z_dla,
-                max_z_dla,
-                min_log_nhi,
-                max_log_nhi,
-                normalized_pdf,
-                self.padded_wavelengths,
-                self.this_mu,
-                self.this_M,
-                self.this_omega2,
-                self.pixel_mask,
-                self.ind_unmasked,
-                self.params.num_lines,
-            ),
-        )
-
-        # initial position
-        if pos is None:
-            sample_z_dlas = self.dla_samples.sample_z_dlas(
-                self.this_wavelengths, self.z_qso
-            )
-            pos = np.concatenate(
-                [
-                    np.random.choice(sample_z_dlas, size=nwalkers)[:, None],
-                    np.random.choice(self.dla_samples.log_nhi_samples, size=nwalkers)[
-                        :, None
-                    ],
-                ],
-                axis=1,
-            )
-
-            assert pos.shape[0] == nwalkers
-
-        sampler.run_mcmc(pos, nsamples, progress=True, skip_initial_state_check=skip_initial_state_check)
-
-        # return the sampler after the sampling
-        return sampler
 
     def sample_log_likelihood_k_dlas(
         self, z_dlas: np.ndarray, nhis: np.ndarray
