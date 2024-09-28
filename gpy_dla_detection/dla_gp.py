@@ -2,7 +2,7 @@
 A GP class for having multiple DLAs intervening in a given slightline. 
 """
 
-from typing import Tuple, Optional, Callable
+from typing import Tuple, Optional, Callable, List
 import os
 
 import concurrent.futures
