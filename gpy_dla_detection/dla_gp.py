@@ -1,6 +1,7 @@
 """
 A GP class for having multiple DLAs intervening in a given slightline. 
 """
+
 from typing import Tuple, Optional, Callable
 import os
 
@@ -17,6 +18,7 @@ from .set_parameters import Parameters
 from .model_priors import PriorCatalog
 from .null_gp import NullGP
 from .voigt import voigt_absorption
+
 # from .voigt_fast import VoigtProfile
 
 # voigt_absorption = VoigtProfile().compute_voigt_profile
@@ -26,7 +28,7 @@ from .voigt import voigt_absorption
 from .dla_samples import DLASamplesMAT
 
 # Limit the number of workers to the number of CPU cores
-max_workers = os.cpu_count() * 2
+# max_workers = os.cpu_count() * 2
 
 
 def process_sample(
@@ -80,9 +82,56 @@ def process_sample(
         del z_dlas_2_k, log_nhis_2_k, nhis_2_k
 
     # Compute the sample log likelihoods conditioned on k-DLAs
-    log_likelihood = sample_log_likelihood_k_dlas(z_dlas, nhis) - np.log(params.num_dla_samples)
+    log_likelihood = sample_log_likelihood_k_dlas(z_dlas, nhis) - np.log(
+        params.num_dla_samples
+    )
 
     return log_likelihood
+
+
+def process_batch(
+    batch_indices: List[int],
+    num_dlas: int,
+    sample_z_dlas: np.ndarray,
+    base_sample_inds: np.ndarray,
+    dla_samples: DLASamplesMAT,
+    params: Parameters,
+    sample_log_likelihood_k_dlas: callable,
+) -> List[float]:
+    """
+    Process a batch of samples. For each sample in the batch, this function computes
+    the log likelihood using `process_sample` and returns the results as a list.
+
+    Args:
+        batch_indices (List[int]): Indices of the samples in the batch.
+        num_dlas (int): Number of DLAs to consider in the model.
+        sample_z_dlas (np.ndarray): Array of sampled redshift values for DLAs.
+        base_sample_inds (np.ndarray): Base indices for resampling according to the prior.
+        dla_samples ('DLASamplesMAT'): Object containing the DLA sample catalog.
+        params ('Parameters'): Model parameters object.
+        sample_log_likelihood_k_dlas (callable): Function to compute log likelihood for each sample.
+
+    Returns:
+        List[float]: List of log likelihoods for each sample in the batch.
+    """
+    batch_results = []  # This will store the results for the entire batch
+
+    # Loop through each sample index in the batch and process it
+    for i in batch_indices:
+        # Process each sample using the same logic as process_sample
+        result = process_sample(
+            i,
+            num_dlas,
+            sample_z_dlas,
+            base_sample_inds,
+            dla_samples,
+            params,
+            sample_log_likelihood_k_dlas,
+        )
+        batch_results.append(result)  # Store the result in the batch result list
+
+    return batch_results  # Return the list of results for the batch
+
 
 class DLAGP(NullGP):
     """
@@ -93,7 +142,7 @@ class DLAGP(NullGP):
     and the strength of the absorption intervening on the QSO emission.
 
     Since the integration is not tractable, so we use QMC to approximate
-    the model evidence. 
+    the model evidence.
 
     How many QMC samples will be defined in Parameters and DLASamples.
 
@@ -151,7 +200,7 @@ class DLAGP(NullGP):
         """
         marginalize out the DLA parameters, {(z_dla_i, logNHI_i)}_{i=1}^k_dlas,
         and return an array of log_model_evidences for 1:k DLA models
-        
+
         Note: we provide an integration method here to reproduce the functionality
         in Ho-Bird-Garnett's code, but we encourage users to improve this sampling
         scheme to be more efficient with another external script by calling
@@ -168,7 +217,11 @@ class DLAGP(NullGP):
         # base inds to store the QMC samples to be resampled according
         # the prior, which is the posterior of the previous run.
         base_sample_inds = np.zeros(
-            (max_dlas - 1, self.params.num_dla_samples,), dtype=np.int32
+            (
+                max_dlas - 1,
+                self.params.num_dla_samples,
+            ),
+            dtype=np.int32,
         )
 
         # sorry, let me follow the convention of the MATLAB code here
@@ -282,7 +335,9 @@ class DLAGP(NullGP):
 
         return log_likelihoods_dla
 
-    def parallel_log_model_evidences(self, max_dlas: int) -> np.ndarray:
+    def parallel_log_model_evidences(
+        self, max_dlas: int, max_workers: int = None, batch_size: int = 100
+    ) -> np.ndarray:
         """
         Parallelized version of the log model evidences computation using process-based parallelization.
 
@@ -296,6 +351,9 @@ class DLAGP(NullGP):
         Returns:
             np.ndarray: Array containing the computed log likelihoods for 1 to `max_dlas` DLAs.
         """
+        # Use the number of CPU cores * 2 as the default number of workers
+        if max_workers is None:
+            max_workers = os.cpu_count() * 2
 
         # Allocate the final log model evidences
         log_likelihoods_dla = np.empty((max_dlas,))
@@ -311,31 +369,51 @@ class DLAGP(NullGP):
         sample_log_likelihoods[:] = np.nan
 
         # Prepare z_dla samples
-        sample_z_dlas = self.dla_samples.sample_z_dlas(self.this_wavelengths, self.z_qso)
+        sample_z_dlas = self.dla_samples.sample_z_dlas(
+            self.this_wavelengths, self.z_qso
+        )
+
+        # Create batches of indices (each batch will process multiple samples)
+        # If batch_size=100, this means each task will process 100 samples
+        indices = list(
+            range(self.params.num_dla_samples)
+        )  # Create a list of all sample indices
+        batches = [
+            indices[i : i + batch_size] for i in range(0, len(indices), batch_size)
+        ]  # Split indices into batches
 
         for num_dlas in range(max_dlas):  # Iterate from 0 to max_dlas - 1
             # Use a ProcessPoolExecutor to parallelize the loop
-            with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-                futures = [
+            with concurrent.futures.ThreadPoolExecutor(
+                max_workers=max_workers
+            ) as executor:
+                # Submit the tasks for each batch to the thread pool
+                futures = {
                     executor.submit(
-                        process_sample,
-                        i,
+                        process_batch,
+                        batch,
                         num_dlas,
                         sample_z_dlas,
                         base_sample_inds,
                         self.dla_samples,
                         self.params,
                         self.sample_log_likelihood_k_dlas,
-                        self.min_z_separation
-                    )
-                    for i in range(self.params.num_dla_samples)
-                ]
+                    ): batch
+                    for batch in batches
+                }
 
-                # Process results as they complete
+                # Process the results as each batch completes
                 for future in as_completed(futures):
-                    i = futures.index(future)  # Find which task's result it is
-                    result = future.result()  # Get the result for the completed task
-                    sample_log_likelihoods[i, num_dlas] = result
+                    batch_indices = futures[
+                        future
+                    ]  # Retrieve the indices of the batch from the future
+                    batch_results = (
+                        future.result()
+                    )  # Get the results (log likelihoods) for this batch
+
+                    # Store the results in the corresponding places in sample_log_likelihoods
+                    for i, result in zip(batch_indices, batch_results):
+                        sample_log_likelihoods[i, num_dlas] = result
 
             # Store results into sample_log_likelihoods
             # for i, result in enumerate(results):
@@ -344,13 +422,21 @@ class DLAGP(NullGP):
             # Handle NaN values and resampling logic
             if num_dlas > 0:
                 ind = base_sample_inds[:num_dlas, :]
-                all_z_dlas = np.concatenate([sample_z_dlas[None, :], sample_z_dlas[ind]], axis=0)
-                ind = np.any(np.diff(np.sort(all_z_dlas, axis=0), axis=0) < self.min_z_separation, axis=0)
+                all_z_dlas = np.concatenate(
+                    [sample_z_dlas[None, :], sample_z_dlas[ind]], axis=0
+                )
+                ind = np.any(
+                    np.diff(np.sort(all_z_dlas, axis=0), axis=0)
+                    < self.min_z_separation,
+                    axis=0,
+                )
                 sample_log_likelihoods[ind, num_dlas] = np.nan
 
             # Compute the log likelihood for each number of DLAs
             max_log_likelihood = np.nanmax(sample_log_likelihoods[:, num_dlas])
-            sample_probabilities = np.exp(sample_log_likelihoods[:, num_dlas] - max_log_likelihood)
+            sample_probabilities = np.exp(
+                sample_log_likelihoods[:, num_dlas] - max_log_likelihood
+            )
             log_likelihoods_dla[num_dlas] = (
                 max_log_likelihood
                 + np.log(np.nanmean(sample_probabilities))
@@ -461,7 +547,7 @@ class DLAGP(NullGP):
 
         dla_mu = self.this_mu * absorption
         dla_M = self.this_M * absorption[:, None]
-        dla_omega2 = self.this_omega2 * absorption ** 2
+        dla_omega2 = self.this_omega2 * absorption**2
 
         return dla_mu, dla_M, dla_omega2
 
@@ -469,18 +555,18 @@ class DLAGP(NullGP):
         """
         get the model prior of null model, this is defined to be:
             P(k DLA | zQSO) = P(at least k DLAs | zQSO) - P(at least (k + 1) DLAs | zQSO),
-        
+
         where
 
             P(at least 1 DLA | zQSO) = M / N
-        
+
         M : number of DLAs below this zQSO
         N : number of quasars below this zQSO
 
         and
 
             P(at least k DLA | zQSO) = (M / N)^k
-        
+
         Note: I did not overwrite the NullGP log prior, name of this method is log_prior's'
         for multi-DLAs
         """
