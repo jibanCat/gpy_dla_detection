@@ -1,7 +1,9 @@
 """
 A GP class for having multiple DLAs intervening in a given slightline. 
 """
-from typing import Tuple, Optional
+from typing import Tuple, Optional, Callable
+
+import concurrent.futures
 
 import numpy as np
 import scipy.stats as stats
@@ -20,6 +22,62 @@ voigt_absorption = VoigtProfile().compute_voigt_profile
 # I import this is for the convenient of my autocomplete
 from .dla_samples import DLASamplesMAT
 
+
+
+def process_sample(
+    i: int,
+    num_dlas: int,
+    sample_z_dlas: np.ndarray,
+    base_sample_inds: np.ndarray,
+    dla_samples: DLASamplesMAT,
+    params: Parameters,
+    sample_log_likelihood_k_dlas: Callable[[np.ndarray, np.ndarray], float],
+    min_z_separation: float,
+) -> float:
+    """
+    Process a single sample by querying DLA parameters and computing the log likelihood.
+
+    This function retrieves the DLA parameters (redshift `z_dlas` and column density `logNHI`) for the
+    current sample. If `num_dlas` > 0, it retrieves additional parameters for multiple DLAs. Finally, it
+    computes the log likelihood of the k-DLA model for the given sample.
+
+    Args:
+        i (int): Index of the current sample.
+        num_dlas (int): Number of DLAs in the model for this sample.
+        sample_z_dlas (np.ndarray): Array of sampled redshift values for DLAs.
+        base_sample_inds (np.ndarray): Base indices to be resampled according to the prior.
+        dla_samples ('DLASamplesMAT'): Object containing the DLA sample catalog.
+        params ('Parameters'): Model parameters object.
+        sample_log_likelihood_k_dlas (Callable): Function to compute the log likelihood of k-DLA model.
+        min_z_separation (float): Minimum redshift separation for the DLA samples.
+
+    Returns:
+        float: The computed log likelihood for this sample.
+    """
+
+    # Query the 1st DLA parameter {z_dla, logNHI}_{i=1} from the given DLA samples
+    z_dlas = np.array([sample_z_dlas[i]])
+    log_nhis = np.array([dla_samples.log_nhi_samples[i]])
+    nhis = np.array([dla_samples.nhi_samples[i]])
+
+    # Query the 2:k DLA parameters {z_dla, logNHI}_{i=2}^k_dlas
+    if num_dlas > 0:
+        base_ind = base_sample_inds[:num_dlas, i]
+        z_dlas_2_k = sample_z_dlas[base_ind]
+        log_nhis_2_k = dla_samples.log_nhi_samples[base_ind]
+        nhis_2_k = dla_samples.nhi_samples[base_ind]
+
+        # Append to samples to be applied on calculating the log likelihood
+        z_dlas = np.append(z_dlas, z_dlas_2_k)
+        log_nhis = np.append(log_nhis, log_nhis_2_k)
+        nhis = np.append(nhis, nhis_2_k)
+
+        del z_dlas_2_k, log_nhis_2_k, nhis_2_k
+
+    # Compute the sample log likelihoods conditioned on k-DLAs
+    log_likelihood = sample_log_likelihood_k_dlas(z_dlas, nhis) - np.log(params.num_dla_samples)
+
+    return log_likelihood
 
 class DLAGP(NullGP):
     """
@@ -214,6 +272,97 @@ class DLAGP(NullGP):
 
         # store sample likelihoods for MAP value calculation
         # this could cause troubles for parallelization in the future
+        self.sample_log_likelihoods = sample_log_likelihoods
+        self.base_sample_inds = base_sample_inds
+
+        return log_likelihoods_dla
+
+    def parallel_log_model_evidences(self, max_dlas: int) -> np.ndarray:
+        """
+        Parallelized version of the log model evidences computation using process-based parallelization.
+
+        This method computes the log likelihoods of the k-DLA models in parallel using `ProcessPoolExecutor`.
+        The process is repeated for each number of DLAs (up to `max_dlas`), and the results are stored
+        in an array.
+
+        Args:
+            max_dlas (int): The maximum number of DLAs to be considered in the model.
+
+        Returns:
+            np.ndarray: Array containing the computed log likelihoods for 1 to `max_dlas` DLAs.
+        """
+
+        # Allocate the final log model evidences
+        log_likelihoods_dla = np.empty((max_dlas,))
+        log_likelihoods_dla[:] = np.nan
+
+        # Base indices to store the QMC samples to be resampled according to the prior
+        base_sample_inds = np.zeros(
+            (max_dlas - 1, self.params.num_dla_samples), dtype=np.int32
+        )
+
+        # Allocate sample log likelihoods array
+        sample_log_likelihoods = np.empty((self.params.num_dla_samples, max_dlas))
+        sample_log_likelihoods[:] = np.nan
+
+        # Prepare z_dla samples
+        sample_z_dlas = self.dla_samples.sample_z_dlas(self.this_wavelengths, self.z_qso)
+
+        for num_dlas in range(max_dlas):  # Iterate from 0 to max_dlas - 1
+            # Use a ProcessPoolExecutor to parallelize the loop
+            with concurrent.futures.ProcessPoolExecutor() as executor:
+                futures = [
+                    executor.submit(
+                        process_sample,
+                        i,
+                        num_dlas,
+                        sample_z_dlas,
+                        base_sample_inds,
+                        self.dla_samples,
+                        self.params,
+                        self.sample_log_likelihood_k_dlas,
+                        self.min_z_separation
+                    )
+                    for i in range(self.params.num_dla_samples)
+                ]
+                results = [f.result() for f in futures]
+
+            # Store results into sample_log_likelihoods
+            for i, result in enumerate(results):
+                sample_log_likelihoods[i, num_dlas] = result
+
+            # Handle NaN values and resampling logic
+            if num_dlas > 0:
+                ind = base_sample_inds[:num_dlas, :]
+                all_z_dlas = np.concatenate([sample_z_dlas[None, :], sample_z_dlas[ind]], axis=0)
+                ind = np.any(np.diff(np.sort(all_z_dlas, axis=0), axis=0) < self.min_z_separation, axis=0)
+                sample_log_likelihoods[ind, num_dlas] = np.nan
+
+            # Compute the log likelihood for each number of DLAs
+            max_log_likelihood = np.nanmax(sample_log_likelihoods[:, num_dlas])
+            sample_probabilities = np.exp(sample_log_likelihoods[:, num_dlas] - max_log_likelihood)
+            log_likelihoods_dla[num_dlas] = (
+                max_log_likelihood
+                + np.log(np.nanmean(sample_probabilities))
+                - np.log(self.params.num_dla_samples) * num_dlas
+            )
+
+            if (num_dlas + 1) == max_dlas or np.isnan(log_likelihoods_dla[num_dlas]):
+                break
+
+            # Resampling logic to update base sample indices
+            nanind = np.isnan(sample_probabilities)
+            W = sample_probabilities
+            W[nanind] = 0.0
+
+            base_sample_inds[num_dlas, :] = np.random.choice(
+                np.arange(self.params.num_dla_samples).astype(np.int32),
+                size=self.params.num_dla_samples,
+                replace=True,
+                p=W / W.sum(),
+            )
+
+        # Store results for future use
         self.sample_log_likelihoods = sample_log_likelihoods
         self.base_sample_inds = base_sample_inds
 
