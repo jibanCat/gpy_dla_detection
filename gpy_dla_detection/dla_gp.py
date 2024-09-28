@@ -17,7 +17,9 @@ import h5py
 from .set_parameters import Parameters
 from .model_priors import PriorCatalog
 from .null_gp import NullGP
-from .voigt import voigt_absorption
+
+# from .voigt import voigt_absorption
+from .voigt_jit import compute_voigt_absorption as voigt_absorption
 
 # from .voigt_fast import VoigtProfile
 
