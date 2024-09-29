@@ -1,11 +1,14 @@
 """
 A class to handle the Null model in Ho, Bird, Garnett (2020).
 """
+
 import numpy as np
 import h5py
 import scipy
 from scipy import interpolate
 from scipy.linalg import lapack
+
+from numba import njit
 
 from .set_parameters import Parameters
 from .model_priors import PriorCatalog
@@ -305,6 +308,7 @@ class NullGP:
         return log_likelihood_no_dla
 
     @staticmethod
+    @njit
     def log_mvnpdf_low_rank(
         y: np.ndarray,
         mu: np.ndarray,
