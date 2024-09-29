@@ -201,6 +201,9 @@ class DLAGP(NullGP):
 
         self.broadening = broadening
 
+        # Initialize a cache for Voigt profiles
+        self.voigt_cache = {}
+
     def log_model_evidences(self, max_dlas: int) -> np.ndarray:
         """
         marginalize out the DLA parameters, {(z_dla_i, logNHI_i)}_{i=1}^k_dlas,
@@ -482,8 +485,10 @@ class DLAGP(NullGP):
         """
         assert len(z_dlas) == len(nhis)
 
+        # Reuse or cache the Voigt profiles
         dla_mu, dla_M, dla_omega2 = self.this_dla_gp(z_dlas, nhis)
 
+        # Compute the log-likelihood
         sample_log_likelihood = self.log_mvnpdf_low_rank(
             self.y, dla_mu, dla_M, dla_omega2 + self.v
         )
@@ -528,24 +533,29 @@ class DLAGP(NullGP):
         else:
             wavelengths = self.unmasked_wavelengths
 
-        # absorption corresponding to this sample
-        absorption = voigt_absorption(
-            wavelengths,
-            z_dla=z_dlas[0],
-            nhi=nhis[0],
-            num_lines=self.params.num_lines,
-            # broadening=self.broadening, # the switch for instrumental broadening controlled by instance attr
-        )
+        # Initialize the absorption profile for the DLA model
+        absorption = np.ones(wavelengths.shape[0])
 
-        # absorption corresponding to other DLAs in multiple DLA samples
-        for j in range(1, k_dlas):
-            absorption = absorption * voigt_absorption(
-                wavelengths,
-                z_dla=z_dlas[j],
-                nhi=nhis[j],
-                num_lines=self.params.num_lines,
-                # broadening=self.broadening, # the switch for instrumental broadening controlled by instance attr
-            )
+        # Loop through each DLA and compute/reuse the Voigt profiles
+        for j in range(k_dlas):
+            # Create a unique cache key for the current (z_dla, nhi) pair
+            cache_key = (z_dlas[j], nhis[j])
+
+            if cache_key in self.voigt_cache:
+                # Retrieve from cache if available
+                cached_absorption = self.voigt_cache[cache_key]
+            else:
+                # Otherwise, compute the Voigt profile and store in cache
+                cached_absorption = voigt_absorption(
+                    wavelengths,
+                    z_dla=z_dlas[j],
+                    nhi=nhis[j],
+                    num_lines=self.params.num_lines,
+                )
+                self.voigt_cache[cache_key] = cached_absorption
+
+            # Multiply the absorption profiles for all DLAs
+            absorption *= cached_absorption
 
         absorption = absorption[mask_ind]
 
