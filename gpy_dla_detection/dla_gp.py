@@ -534,7 +534,7 @@ class DLAGP(NullGP):
             wavelengths = self.unmasked_wavelengths
 
         # Initialize the absorption profile for the DLA model
-        absorption = np.ones(wavelengths.shape[0])
+        absorption = np.ones(self.unmasked_wavelengths.shape[0])
 
         # Loop through each DLA and compute/reuse the Voigt profiles
         for j in range(k_dlas):
