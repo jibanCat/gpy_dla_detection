@@ -539,7 +539,7 @@ class DLAGP(NullGP):
         # Loop through each DLA and compute/reuse the Voigt profiles
         for j in range(k_dlas):
             # Create a unique cache key for the current (z_dla, nhi) pair
-            cache_key = (z_dlas[j], nhis[j])
+            cache_key = (z_dlas[j], nhis[j], self.broadening)
 
             if cache_key in self.voigt_cache:
                 # Retrieve from cache if available
