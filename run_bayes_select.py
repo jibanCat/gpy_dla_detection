@@ -24,7 +24,7 @@ from gpy_dla_detection.subdla_samples import SubDLASamplesMAT
 from gpy_dla_detection.bayesian_model_selection import BayesModelSelect
 from gpy_dla_detection.plottings.plot_model import plot_dla_model
 
-from gpy_dla_detection.desi_spectrum_reader import (
+from desi_spectrum_reader import (
     DESISpectrumReader,
 )  # Assuming you have DESISpectrumReader implemented
 from collections import namedtuple
@@ -50,6 +50,8 @@ def process_qso(
     max_dlas: int = 4,
     broadening: bool = True,
     plot_figures: bool = False,
+    max_workers: int = None,
+    batch_size: int = 100,
 ):
     """
     Process DESI spectra with Bayesian model selection for DLA detection.
@@ -80,6 +82,10 @@ def process_qso(
         Whether to include instrumental broadening (default is True).
     plot_figures : bool, optional
         If True, generates plots for each processed spectrum (default is False).
+    max_workers : int, optional
+        The number of workers for parallel processing (default is None).
+    batch_size : int, optional
+        The batch size for parallel model evidence computation (default is 100).
     """
 
     # Initialize parameters and priors
@@ -152,6 +158,8 @@ def process_qso(
             learned_file,
             min_z_separation,
             plot_figures,
+            max_workers,
+            batch_size,
         )
 
         toc = time.time()
@@ -185,6 +193,8 @@ def process_single_spectrum(
     learned_file: str,
     min_z_separation: float,
     plot_figures: bool,
+    max_workers: int,
+    batch_size: int,
 ):
     """
     Process a single spectrum using Null, DLA, and subDLA models.
@@ -226,8 +236,10 @@ def process_single_spectrum(
         rest_wavelengths, flux, noise_variance, pixel_mask, z_qso, build_model=True
     )
 
-    # Run Bayesian model selection
-    log_posteriors = bayes.model_selection([gp, subdla_gp, dla_gp], z_qso)
+    # Run Bayesian model selection with parallelized model evidence computation
+    log_posteriors = bayes.model_selection(
+        [gp, subdla_gp, dla_gp], z_qso, max_workers=max_workers, batch_size=batch_size
+    )
 
     # Store results
     results["min_z_dlas"][idx] = dla_gp.params.min_z_dla(wavelengths, z_qso)
@@ -239,16 +251,10 @@ def process_single_spectrum(
     results["log_posteriors_no_dla"][idx] = bayes.log_posteriors[0]
     results["log_posteriors_dla"][idx, :] = bayes.log_posteriors[-max_dlas:]
 
-    results["sample_log_likelihoods_dla"][idx, :, :] = dla_gp.sample_log_likelihoods[
-        :, :
-    ]
-    results["base_sample_inds"][idx, :, :] = dla_gp.base_sample_inds[:, :].T
+    results["sample_log_likelihoods_dla"][idx, :, :] = dla_gp.sample_log_likelihoods
+    results["base_sample_inds"][idx, :, :] = dla_gp.base_sample_inds
 
-    results["sample_log_likelihoods_lls"][idx, :] = subdla_gp.sample_log_likelihoods[
-        :, 0
-    ]
-
-    # Maximum a posteriori (MAP) estimation for each model
+    # MAP results
     MAP_z_dla, MAP_log_nhi = dla_gp.maximum_a_posteriori()
     results["MAP_z_dlas"][idx, :, :] = MAP_z_dla
     results["MAP_log_nhis"][idx, :, :] = MAP_log_nhi
@@ -265,6 +271,34 @@ def process_single_spectrum(
         make_plots(dla_gp, bayes, filename=out_filename, sub_dir="images", title=title)
         plt.clf()
         plt.close()
+
+
+def initialize_results(num_spectra: int, max_dlas: int, num_dla_samples: int) -> dict:
+    """
+    Initialize arrays for storing the results of the Bayesian model selection.
+    """
+    results = {
+        "min_z_dlas": np.full((num_spectra,), np.nan),
+        "max_z_dlas": np.full((num_spectra,), np.nan),
+        "log_priors_no_dla": np.full((num_spectra,), np.nan),
+        "log_priors_dla": np.full((num_spectra, max_dlas), np.nan),
+        "log_likelihoods_no_dla": np.full((num_spectra,), np.nan),
+        "log_likelihoods_dla": np.full((num_spectra, max_dlas), np.nan),
+        "log_posteriors_no_dla": np.full((num_spectra,), np.nan),
+        "log_posteriors_dla": np.full((num_spectra, max_dlas), np.nan),
+        "sample_log_likelihoods_dla": np.full(
+            (num_spectra, num_dla_samples, max_dlas), np.nan
+        ),
+        "base_sample_inds": np.zeros(
+            (num_spectra, num_dla_samples, max_dlas - 1), dtype=np.int32
+        ),
+        "MAP_z_dlas": np.full((num_spectra, max_dlas, max_dlas), np.nan),
+        "MAP_log_nhis": np.full((num_spectra, max_dlas, max_dlas), np.nan),
+        "model_posteriors": np.full((num_spectra, 1 + 1 + max_dlas), np.nan),
+        "p_dlas": np.full((num_spectra,), np.nan),
+        "p_no_dlas": np.full((num_spectra,), np.nan),
+    }
+    return results
 
 
 def save_results_to_hdf5(
@@ -374,6 +408,18 @@ if __name__ == "__main__":
         default=0,
         help="Set to 1 to generate plots, 0 otherwise (default: 0).",
     )
+    parser.add_argument(
+        "--max_workers",
+        type=int,
+        default=None,
+        help="Number of workers for parallel processing (default: None).",
+    )
+    parser.add_argument(
+        "--batch_size",
+        type=int,
+        default=100,
+        help="Batch size for parallel model evidence computation (default: 100).",
+    )
 
     args = parser.parse_args()
 
@@ -389,4 +435,6 @@ if __name__ == "__main__":
         min_z_separation=args.min_z_separation,
         max_dlas=args.max_dlas,
         plot_figures=bool(args.plot_figures),
+        max_workers=args.max_workers,
+        batch_size=args.batch_size,
     )

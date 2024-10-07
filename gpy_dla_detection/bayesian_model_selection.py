@@ -1,18 +1,7 @@
-"""
-bayesian_model_selection.py : A class to perform DLA classification
-using Bayes rule via Bayesian model selection (or known to be
-Bayesian hypothesis testing)
-
-Check Roman's Lecture 7: https://www.cse.wustl.edu/~garnett/cse515t/spring_2019/
-or Mackay's information theory, Chapter 28.
-"""
-from typing import List, Tuple, Union
-
+from typing import List, Union
 from itertools import chain
-
 import numpy as np
 from scipy.special import logsumexp
-
 from .null_gp import NullGP
 from .dla_gp import DLAGP
 from .subdla_gp import SubDLAGP
@@ -23,85 +12,84 @@ class BayesModelSelect:
     Bayesian model selection:
 
         p(M | D) = P(M) * P(D | M) / ∑_i( P(M_i) * P(D | M_i) )
-    
-    which reads:
-    
-        model posterior = model prior * model evidence
-            / (sum of the model posteriors of all possible models)
 
-    :attr model_list: a List of models we want to compute in Bayesian model selection.
-    :attr all_max_dlas: a List of integers indicates number of DLAs to be computed
-        for each model in the List. 0 for no DLA, which means NullGP, for max_dlas > 0,
-        model evidences will be calculated from .dla_gp.DLAGP.log_model_evidences(max_dlas).
-    :attr dla_model_ind: an integer indicates the index of DLA model in the model_list. This
-        means all other models within model_list will be considered to be 
-        Default is 2.
+    :attr all_max_dlas: List of maximum DLAs for each model in the model list.
+    :attr dla_model_ind: Index of the DLA model in the model list.
     """
 
-    def __init__(
-        self, all_max_dlas: List[int] = [0, 1, 4], dla_model_ind: int = 2,
-    ):
-        # a list of models, all have a base class of NullGP
+    def __init__(self, all_max_dlas: List[int] = [0, 1, 4], dla_model_ind: int = 2):
+        """
+        Initialize the Bayesian model selection with the list of models and their maximum DLAs.
+
+        :param all_max_dlas: A list of integers, indicating the number of DLAs for each model.
+                             0 indicates the null model.
+        :param dla_model_ind: The index of the DLA model in the list. Default is 2.
+        """
         self.all_max_dlas = all_max_dlas
         self.dla_model_ind = dla_model_ind
 
     def model_selection(
-        self, model_list: List[Union[NullGP, SubDLAGP, DLAGP]], z_qso: float
+        self,
+        model_list: List[Union[NullGP, SubDLAGP, DLAGP]],
+        z_qso: float,
+        max_workers: int = None,
+        batch_size: int = 100,
     ) -> np.ndarray:
         """
-        Calculate the log model evidences and priors for each model
-        in the model_list.
+        Perform Bayesian model selection for a list of models.
 
-        Default assumption is [null model, subDLA model, DLA model].
-        And always assume the first model is null model and the last one is DLA model. 
+        :param model_list: List of models to compare (NullGP, SubDLAGP, DLAGP).
+        :param z_qso: The redshift of the quasar.
+        :param max_workers: Number of workers to use for parallel processing.
+        :param batch_size: Batch size for parallel computation.
+        :return: Array of log posteriors for each model.
         """
-        assert ~isinstance(model_list[0], DLAGP)
-        assert isinstance(model_list[-1], DLAGP)
-        assert isinstance(model_list[-1], NullGP)
-        assert len(model_list) > self.dla_model_ind
+        assert isinstance(model_list[0], NullGP)  # Null model
+        assert isinstance(model_list[-1], DLAGP)  # DLA model
+        assert len(model_list) > self.dla_model_ind  # Check if DLA model is in the list
 
         log_posteriors = []
         log_priors = []
         log_likelihoods = []
 
-        # prepare the model priors first, so we can get the null model prior
+        # Prepare the model priors for each model
         for i, num_dlas in enumerate(self.all_max_dlas):
-            # skip null model prior
+            # Skip the null model prior (no DLAs)
             if num_dlas == 0:
                 log_priors.append([np.nan])
                 continue
 
-            # model priors
+            # Compute the model priors for DLA and subDLA models
             log_priors_dla = model_list[i].log_priors(z_qso, num_dlas)
             log_priors.append(log_priors_dla)
 
-        # null model prior is (1 - other model priors)
+        # Calculate the null model prior as (1 - sum of all other model priors)
         log_priors = np.array(list(chain(*log_priors)))
         log_priors[0] = np.log(1 - np.exp(logsumexp(log_priors[1:])))
 
-        # calculating model evidences
-        # [Prior] the indexing part of priors is tricky. Do the elementwise addition instead!
+        # Calculate model evidences (log likelihoods)
         for i, num_dlas in enumerate(self.all_max_dlas):
-            # if this is null model
             if num_dlas == 0:
-                # model evidence
+                # Null model evidence
                 log_likelihood_no_dla = model_list[i].log_model_evidence()
                 log_likelihoods.append([log_likelihood_no_dla])
-
-            # if this is for DLA model or subDLA model
             else:
-                # model evidence
-                log_likelihoods_dla = model_list[i].log_model_evidences(num_dlas)
+                # Use parallel model evidence calculation for DLA models
+                log_likelihoods_dla = model_list[i].parallel_log_model_evidences(
+                    num_dlas, max_workers=max_workers, batch_size=batch_size
+                )
                 log_likelihoods.append(log_likelihoods_dla)
 
-        # flatten the nested list : this is due to each element
+        # Flatten the log likelihoods and compute the posteriors
         log_likelihoods = np.array(list(chain(*log_likelihoods)))
-        # [Prior] elementwise addition
         log_posteriors = log_likelihoods + log_priors
 
-        # [Prior] make sure prior assignment was correct
-        assert np.abs((log_likelihoods[-1] + log_priors[-1]) - log_posteriors[-1]) < 1e-4
+        # Ensure prior assignment is correct
+        assert (
+            np.abs((log_likelihoods[-1] + log_priors[-1]) - log_posteriors[-1]) < 1e-4
+        )
 
+        # Store results for later use
         self.log_priors = log_priors
         self.log_likelihoods = log_likelihoods
         self.log_posteriors = log_posteriors
@@ -111,7 +99,7 @@ class BayesModelSelect:
     @property
     def dla_model_posterior_ind(self):
         """
-        Find the ind for DLA model posteriors in the log_posteriors array.
+        Find the index for DLA model posteriors in the log_posteriors array.
 
         Default is [no DLA, subDLA, 1 DLA, 2 DLA, 3 DLA, 4 DLA],
         corresponding to all_max_dlas = [0, 1, 4].
@@ -125,25 +113,40 @@ class BayesModelSelect:
 
     @property
     def model_posteriors(self):
+        """
+        Compute the model posteriors as normalized probabilities.
+        """
         sum_log_posteriors = logsumexp(self.log_posteriors)
         return np.exp(self.log_posteriors - sum_log_posteriors)
 
     @property
     def model_evidences(self):
+        """
+        Compute the model evidences as normalized probabilities.
+        """
         sum_log_evidences = logsumexp(self.log_likelihoods)
         return np.exp(self.log_likelihoods - sum_log_evidences)
 
     @property
     def model_priors(self):
+        """
+        Compute the model priors as normalized probabilities.
+        """
         sum_log_priors = logsumexp(self.log_priors)
         return np.exp(self.log_priors - sum_log_priors)
 
     @property
     def p_dla(self):
+        """
+        Compute the posterior probability of having a DLA.
+        """
         model_posteriors = self.model_posteriors
         self._p_dla = np.sum(model_posteriors[self.dla_model_posterior_ind])
         return self._p_dla
 
     @property
     def p_no_dla(self):
+        """
+        Compute the posterior probability of not having a DLA.
+        """
         return 1 - self.p_dla

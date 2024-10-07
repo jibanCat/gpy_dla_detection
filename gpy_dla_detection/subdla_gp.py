@@ -134,6 +134,8 @@ class SubDLAGPMAT(SubDLAGP):
         min_z_separation: float = 3000.0,
         learned_file: str = "learned_qso_model_lyseries_variance_kim_dr9q_minus_concordance.mat",
         broadening: bool = True,
+        prev_tau_0: float = 0.0023,
+        prev_beta: float = 3.65,
     ):
         # Load the learned model from the .mat file
         with h5py.File(learned_file, "r") as learned:
@@ -157,8 +159,8 @@ class SubDLAGPMAT(SubDLAGP):
             log_c_0=log_c_0,
             log_tau_0=log_tau_0,
             log_beta=log_beta,
-            prev_tau_0=0.0023,
-            prev_beta=3.65,
+            prev_tau_0=prev_tau_0,
+            prev_beta=prev_beta,
             min_z_separation=min_z_separation,
             broadening=broadening,
         )

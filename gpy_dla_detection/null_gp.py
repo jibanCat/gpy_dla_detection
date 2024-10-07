@@ -398,6 +398,8 @@ class NullGPMAT(NullGP):
         params: Parameters,
         prior: PriorCatalog,
         learned_file: str = "learned_qso_model_lyseries_variance_kim_dr9q_minus_concordance.mat",
+        prev_tau_0: float = 0.0023,
+        prev_beta: float = 3.65,
     ):
         with h5py.File(learned_file, "r") as learned:
             rest_wavelengths = learned["rest_wavelengths"][:, 0]
@@ -418,6 +420,6 @@ class NullGPMAT(NullGP):
             log_c_0,
             log_tau_0,
             log_beta,
-            prev_tau_0=0.0023,
-            prev_beta=3.65,
+            prev_tau_0=prev_tau_0,
+            prev_beta=prev_beta,
         )
