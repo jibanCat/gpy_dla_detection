@@ -1,17 +1,9 @@
-"""
-Run Bayesian model selection on DESI spectra for Damped Lyman-Alpha systems (DLAs).
-
-This script reads DESI spectra using DESISpectrumReader and processes each spectrum
-with Bayesian model selection to detect DLAs.
-
-The results are saved in an HDF5 file, and the script can optionally generate plots.
-"""
-
 import os
 import time
 import numpy as np
 import h5py
 from typing import List
+import argparse
 from matplotlib import pyplot as plt
 
 from gpy_dla_detection.set_parameters import Parameters
@@ -22,200 +14,9 @@ from gpy_dla_detection.subdla_gp import SubDLAGPMAT
 from gpy_dla_detection.dla_samples import DLASamplesMAT
 from gpy_dla_detection.subdla_samples import SubDLASamplesMAT
 from gpy_dla_detection.bayesian_model_selection import BayesModelSelect
-from gpy_dla_detection.plottings.plot_model import plot_dla_model
-
-from gpy_dla_detection.desi_spectrum_reader import (
-    DESISpectrumReader,
-)
-from collections import namedtuple
-import argparse
-
+from gpy_dla_detection.desi_spectrum_reader import DESISpectrumReader
 from gpy_dla_detection.process_helpers import initialize_results, save_results_to_hdf5
-
-from gpy_dla_detection.plottings.plot_model import (
-    plot_samples_vs_this_mu,
-    plot_real_spectrum_space,
-)
-
-# Namedtuple to store spectrum data
-SpectrumData = namedtuple(
-    "SpectrumData", ["wavelengths", "flux", "noise_variance", "pixel_mask"]
-)
-
-
-def process_qso(
-    spectra_filename: str,
-    zbest_filename: str,
-    learned_file: str,
-    catalog_name: str,
-    los_catalog: str,
-    dla_catalog: str,
-    dla_samples_file: str,
-    sub_dla_samples_file: str,
-    min_z_separation: float,
-    prev_tau_0: float,
-    prev_beta: float,
-    max_dlas: int = 4,
-    broadening: bool = True,
-    plot_figures: bool = False,
-    max_workers: int = None,
-    batch_size: int = 100,
-):
-    """
-    Process DESI spectra with Bayesian model selection for DLA detection.
-
-    Parameters:
-    ----------
-    spectra_filename : str
-        The filename of the DESI spectra FITS file.
-    zbest_filename : str
-        The filename of the DESI redshift catalog (zbest-*.fits).
-    learned_file : str
-        The filename of the learned QSO model file.
-    catalog_name : str
-        The filename of the catalog file.
-    los_catalog : str
-        The filename of the line-of-sight catalog.
-    dla_catalog : str
-        The filename of the DLA catalog.
-    dla_samples_file : str
-        The filename of the DLA samples file.
-    sub_dla_samples_file : str
-        The filename of the sub-DLA samples file.
-    min_z_separation : float
-        Minimum redshift separation for DLA models.
-    prev_tau_0 : float
-        The previous value of tau_0 for modeling the Lyman forest noise.
-    prev_beta : float
-        The previous value of beta for modeling the Lyman forest noise.
-    max_dlas : int, optional
-        Maximum number of DLAs to model (default is 4).
-    broadening : bool, optional
-        Whether to include instrumental broadening (default is True).
-    plot_figures : bool, optional
-        If True, generates plots for each processed spectrum (default is False).
-    max_workers : int, optional
-        The number of workers for parallel processing (default is None).
-    batch_size : int, optional
-        The batch size for parallel model evidence computation (default is 100).
-    """
-
-    # Initialize parameters and priors
-    params = Parameters()
-
-    # Load prior catalog data
-    prior = PriorCatalog(
-        params,
-        catalog_name,
-        los_catalog,
-        dla_catalog,
-    )
-
-    # Load DLA and subDLA sample data
-    dla_samples = DLASamplesMAT(params, prior, dla_samples_file)
-    subdla_samples = SubDLASamplesMAT(params, prior, sub_dla_samples_file)
-
-    # Initialize Bayesian model selection
-    bayes = BayesModelSelect([0, 1, max_dlas], 2)
-
-    # Use DESISpectrumReader to read the spectra and redshift catalog
-    reader = DESISpectrumReader(spectra_filename, zbest_filename)
-    reader.read_spectra()
-    reader.read_redshift_catalog()
-
-    # Get redshift data and list of all spectrum IDs
-    redshift_data = reader.get_redshift_data()
-    all_spectrum_ids = reader.get_all_spectrum_ids()
-
-    num_spectra = len(all_spectrum_ids)
-
-    # Initialize arrays to store results
-    results = initialize_results(num_spectra, max_dlas, params.num_dla_samples)
-
-    # Loop through all spectra in the DESI file
-    for idx, spectrum_id in enumerate(all_spectrum_ids):
-        tic = time.time()
-
-        # Get the redshift for the current spectrum
-        z_qso = redshift_data["Z"][idx]
-
-        # Get spectrum data (wavelengths, flux, noise_variance, pixel_mask)
-        spectrum_data = reader.get_spectrum_data(spectrum_id)
-        wavelengths = spectrum_data.wavelengths
-        flux = spectrum_data.flux
-        noise_variance = spectrum_data.noise_variance
-        pixel_mask = spectrum_data.pixel_mask
-
-        # Convert wavelengths to rest-frame
-        rest_wavelengths = params.emitted_wavelengths(wavelengths, z_qso)
-
-        # Instantiate the models once for all spectra
-        null_gp = NullGPMAT(
-            params,
-            prior,
-            learned_file=learned_file,
-            prev_tau_0=prev_tau_0,
-            prev_beta=prev_beta,
-        )
-
-        dla_gp = DLAGPMAT(
-            params=params,
-            prior=prior,
-            dla_samples=dla_samples,
-            min_z_separation=min_z_separation,
-            learned_file=learned_file,
-            broadening=broadening,
-            prev_tau_0=prev_tau_0,
-            prev_beta=prev_beta,
-        )
-
-        subdla_gp = SubDLAGPMAT(
-            params=params,
-            prior=prior,
-            dla_samples=subdla_samples,
-            min_z_separation=min_z_separation,
-            learned_file=learned_file,
-            broadening=broadening,
-            prev_tau_0=prev_tau_0,
-            prev_beta=prev_beta,
-        )
-
-        # Process the spectrum using the instantiated models
-        process_single_spectrum(
-            idx,
-            spectrum_id,
-            z_qso,
-            wavelengths,
-            rest_wavelengths,
-            flux,
-            noise_variance,
-            pixel_mask,
-            params,
-            prior,
-            dla_samples,
-            subdla_samples,
-            bayes,
-            results,
-            max_dlas,
-            broadening,
-            null_gp,  # Pass the NullGPMAT object
-            dla_gp,  # Pass the DLAGPMAT object
-            subdla_gp,  # Pass the SubDLAGPMAT object
-            min_z_separation,
-            plot_figures,
-            max_workers,
-            batch_size,
-        )
-
-        toc = time.time()
-        print(
-            f"Processed spectrum {idx + 1}/{num_spectra} (ID: {spectrum_id}), time spent: {(toc - tic) // 60:.0f}m {(toc - tic) % 60:.0f}s"
-        )
-
-    # Save all results into an HDF5 file
-    save_results_to_hdf5(
-        "processed_desi_spectra.h5", results, all_spectrum_ids, redshift_data["Z"]
-    )
+from gpy_dla_detection.plottings.plot_model import plot_samples_vs_this_mu
 
 
 def process_single_spectrum(
@@ -235,9 +36,9 @@ def process_single_spectrum(
     results: dict,
     max_dlas: int,
     broadening: bool,
-    gp: NullGPMAT,  # Pass already initialized NullGPMAT
-    dla_gp: DLAGPMAT,  # Pass already initialized DLAGPMAT
-    subdla_gp: SubDLAGPMAT,  # Pass already initialized SubDLAGPMAT
+    gp: NullGPMAT,  # Pre-initialized NullGPMAT
+    dla_gp: DLAGPMAT,  # Pre-initialized DLAGPMAT
+    subdla_gp: SubDLAGPMAT,  # Pre-initialized SubDLAGPMAT
     min_z_separation: float,
     plot_figures: bool,
     max_workers: int,
@@ -312,7 +113,7 @@ def process_single_spectrum(
     )
 
     # Run Bayesian model selection with parallelized model evidence computation
-    log_posteriors = bayes.model_selection(
+    bayes.model_selection(
         [gp, subdla_gp, dla_gp], z_qso, max_workers=max_workers, batch_size=batch_size
     )
 
@@ -349,11 +150,200 @@ def process_single_spectrum(
         plt.close()
 
 
+class DLAProcessor:
+    """
+    Class to handle Bayesian model selection for Damped Lyman-Alpha (DLA) system detection in DESI spectra.
+
+    Parameters:
+    ----------
+    spectra_filename : str
+        DESI spectra FITS filename.
+    zbest_filename : str
+        DESI redshift catalog filename.
+    learned_file : str
+        Learned QSO model file path.
+    catalog_name : str
+        Catalog file path.
+    los_catalog : str
+        Line-of-sight catalog file path.
+    dla_catalog : str
+        DLA catalog file path.
+    dla_samples_file : str
+        DLA samples file path.
+    sub_dla_samples_file : str
+        Sub-DLA samples file path.
+    params : Parameters
+        Parameters object containing various settings and hyperparameters.
+    min_z_separation : float
+        Minimum redshift separation between DLAs.
+    prev_tau_0 : float
+        Previous value of the DLA optical depth.
+    prev_beta : float
+        Previous value of the DLA power-law index.
+    max_dlas : int, optional
+        Maximum number of DLAs to consider per spectrum (default is 4).
+    broadening : bool, optional
+        Flag indicating whether to apply broadening to the DLA profiles (default is True).
+    plot_figures : bool, optional
+        Flag indicating whether to plot diagnostic figures during processing (default is False).
+    max_workers : int, optional
+        Maximum number of parallel workers to use for processing (default is None).
+    batch_size : int, optional
+        Batch size for parallel processing (default is 100).
+    """
+
+    def __init__(
+        self,
+        spectra_filename: str,
+        zbest_filename: str,
+        learned_file: str,
+        catalog_name: str,
+        los_catalog: str,
+        dla_catalog: str,
+        dla_samples_file: str,
+        sub_dla_samples_file: str,
+        params: Parameters,
+        min_z_separation: float,
+        prev_tau_0: float,
+        prev_beta: float,
+        max_dlas: int = 4,
+        broadening: bool = True,
+        plot_figures: bool = False,
+        max_workers: int = None,
+        batch_size: int = 100,
+    ):
+        """
+        Initialize the DLAProcessor class with necessary data files and parameters.
+        """
+
+        self.spectra_filename = spectra_filename
+        self.zbest_filename = zbest_filename
+        self.learned_file = learned_file
+        self.catalog_name = catalog_name
+        self.los_catalog = los_catalog
+        self.dla_catalog = dla_catalog
+        self.dla_samples_file = dla_samples_file
+        self.sub_dla_samples_file = sub_dla_samples_file
+        self.min_z_separation = min_z_separation
+        self.prev_tau_0 = prev_tau_0
+        self.prev_beta = prev_beta
+        self.max_dlas = max_dlas
+        self.broadening = broadening
+        self.plot_figures = plot_figures
+        self.max_workers = max_workers
+        self.batch_size = batch_size
+        self.params = params  # Pass in the Parameters object here
+
+        # Initialize prior catalog and Bayesian model selection
+        self.prior = PriorCatalog(self.params, catalog_name, los_catalog, dla_catalog)
+        self.dla_samples = DLASamplesMAT(self.params, self.prior, dla_samples_file)
+        self.subdla_samples = SubDLASamplesMAT(
+            self.params, self.prior, sub_dla_samples_file
+        )
+        self.bayes = BayesModelSelect([0, 1, max_dlas], 2)
+
+        # Initialize reader for DESI spectra
+        self.reader = DESISpectrumReader(spectra_filename, zbest_filename)
+        self.reader.read_spectra()
+        self.reader.read_redshift_catalog()
+        self.redshift_data = self.reader.get_redshift_data()
+        self.all_spectrum_ids = self.reader.get_all_spectrum_ids()
+        self.results = initialize_results(
+            len(self.all_spectrum_ids), max_dlas, self.params.num_dla_samples
+        )
+
+    def process_all_spectra(self):
+        """
+        Process all spectra in the DESI file.
+        """
+        for idx, spectrum_id in enumerate(self.all_spectrum_ids):
+            tic = time.time()
+
+            z_qso = self.redshift_data["Z"][idx]
+            spectrum_data = self.reader.get_spectrum_data(spectrum_id)
+            wavelengths = spectrum_data.wavelengths
+            flux = spectrum_data.flux
+            noise_variance = spectrum_data.noise_variance
+            pixel_mask = spectrum_data.pixel_mask
+
+            rest_wavelengths = self.params.emitted_wavelengths(wavelengths, z_qso)
+
+            # Initialize the Null and DLA models for this spectrum
+            null_gp = NullGPMAT(
+                self.params,
+                self.prior,
+                learned_file=self.learned_file,
+                prev_tau_0=self.prev_tau_0,
+                prev_beta=self.prev_beta,
+            )
+            dla_gp = DLAGPMAT(
+                self.params,
+                self.prior,
+                self.dla_samples,
+                min_z_separation=self.min_z_separation,
+                learned_file=self.learned_file,
+                broadening=self.broadening,
+                prev_tau_0=self.prev_tau_0,
+                prev_beta=self.prev_beta,
+            )
+            subdla_gp = SubDLAGPMAT(
+                self.params,
+                self.prior,
+                self.subdla_samples,
+                min_z_separation=self.min_z_separation,
+                learned_file=self.learned_file,
+                broadening=self.broadening,
+                prev_tau_0=self.prev_tau_0,
+                prev_beta=self.prev_beta,
+            )
+
+            # Process single spectrum
+            process_single_spectrum(
+                idx,
+                spectrum_id,
+                z_qso,
+                wavelengths,
+                rest_wavelengths,
+                flux,
+                noise_variance,
+                pixel_mask,
+                self.params,
+                self.prior,
+                self.dla_samples,
+                self.subdla_samples,
+                self.bayes,
+                self.results,
+                self.max_dlas,
+                self.broadening,
+                null_gp,
+                dla_gp,
+                subdla_gp,
+                self.min_z_separation,
+                self.plot_figures,
+                self.max_workers,
+                self.batch_size,
+            )
+
+            toc = time.time()
+            print(
+                f"Processed spectrum {idx + 1}/{len(self.all_spectrum_ids)} (ID: {spectrum_id}), time spent: {(toc - tic) // 60:.0f}m {(toc - tic) % 60:.0f}s"
+            )
+
+        # Save results to HDF5 file
+        save_results_to_hdf5(
+            "processed_desi_spectra.h5",
+            self.results,
+            self.all_spectrum_ids,
+            self.redshift_data["Z"],
+        )
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Process DESI spectra with Bayesian model selection for DLA detection."
     )
 
+    # Spectra and file-related arguments
     parser.add_argument(
         "--spectra_filename",
         required=True,
@@ -366,80 +356,137 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--learned_file",
-        default="data/dr12q/processed/learned_qso_model_lyseries_variance_kim_dr9q_minus_concordance.mat",
-        help="Learned QSO model file (default: learned_qso_model_lyseries_variance_kim_dr9q_minus_concordance.mat).",
+        default="data/dr12q/processed/learned_qso_model_lyseries_variance.mat",
+        help="Learned QSO model file path.",
     )
     parser.add_argument(
         "--catalog_name",
         default="data/dr12q/processed/catalog.mat",
-        help="Catalog filename (default: catalog.mat).",
+        help="Catalog file path.",
     )
     parser.add_argument(
         "--los_catalog",
-        default="data/dla_catalogs/dr9q_concordance/processed/los_catalog",
-        help="Line-of-sight catalog filename (default: los_catalog).",
+        default="data/dla_catalogs/processed/los_catalog",
+        help="Line-of-sight catalog file path.",
     )
     parser.add_argument(
         "--dla_catalog",
-        default="data/dla_catalogs/dr9q_concordance/processed/dla_catalog",
-        help="DLA catalog filename (default: dla_catalog).",
+        default="data/dla_catalogs/processed/dla_catalog",
+        help="DLA catalog file path.",
     )
     parser.add_argument(
         "--dla_samples_file",
         default="data/dr12q/processed/dla_samples_a03.mat",
-        help="DLA samples file (default: dla_samples_a03.mat).",
+        help="DLA samples file path.",
     )
     parser.add_argument(
         "--sub_dla_samples_file",
         default="data/dr12q/processed/subdla_samples.mat",
-        help="Sub-DLA samples file (default: subdla_samples.mat).",
+        help="Sub-DLA samples file path.",
     )
+
+    # DLA-related arguments
     parser.add_argument(
         "--min_z_separation",
         type=float,
         default=3000.0,
-        help="Minimum redshift separation for DLA models (default: 3000.0).",
+        help="Minimum redshift separation for DLA models.",
     )
     parser.add_argument(
-        "--prev_tau_0",
-        type=float,
-        default=0.0023,
-        help="Previous value for tau_0 (default: 0.0023).",
+        "--prev_tau_0", type=float, default=0.00554, help="Previous value for tau_0."
     )
     parser.add_argument(
-        "--prev_beta",
-        type=float,
-        default=3.65,
-        help="Previous value for beta (default: 3.65).",
+        "--prev_beta", type=float, default=3.182, help="Previous value for beta."
     )
     parser.add_argument(
-        "--max_dlas",
-        type=int,
-        default=4,
-        help="Maximum number of DLAs to model (default: 4).",
+        "--max_dlas", type=int, default=3, help="Maximum number of DLAs to model."
     )
     parser.add_argument(
         "--plot_figures",
         type=int,
         default=0,
-        help="Set to 1 to generate plots, 0 otherwise (default: 0).",
+        help="Set to 1 to generate plots, 0 otherwise.",
     )
     parser.add_argument(
         "--max_workers",
         type=int,
-        default=None,
-        help="Number of workers for parallel processing (default: None).",
+        default=32,
+        help="Number of workers for parallel processing.",
     )
     parser.add_argument(
         "--batch_size",
         type=int,
-        default=100,
-        help="Batch size for parallel model evidence computation (default: 100).",
+        default=313,
+        help="Batch size for parallel model evidence computation.",
+    )
+
+    # Parameter-related arguments
+    # These are the values used in the trained GP model, don't change them unless you change the trained model
+    parser.add_argument(
+        "--loading_min_lambda",
+        type=float,
+        default=800,
+        help="Range of rest wavelengths to load (Å).",
+    )
+    parser.add_argument(
+        "--loading_max_lambda",
+        type=float,
+        default=1550,
+        help="Range of rest wavelengths to load (Å).",
+    )
+    parser.add_argument(
+        "--normalization_min_lambda",
+        type=float,
+        default=1425,
+        help="Range of rest wavelengths for flux normalization.",
+    )
+    parser.add_argument(
+        "--normalization_max_lambda",
+        type=float,
+        default=1475,
+        help="Range of rest wavelengths for flux normalization.",
+    )
+    parser.add_argument(
+        "--min_lambda",
+        type=float,
+        default=850.75,
+        help="Range of rest wavelengths to model (Å).",
+    )
+    parser.add_argument(
+        "--max_lambda",
+        type=float,
+        default=1420.75,
+        help="Range of rest wavelengths to model (Å).",
+    )
+    parser.add_argument(
+        "--dlambda", type=float, default=0.25, help="Separation of wavelength grid (Å)."
+    )
+    parser.add_argument(
+        "--k", type=int, default=20, help="Rank of non-diagonal contribution."
+    )
+    parser.add_argument(
+        "--max_noise_variance",
+        type=float,
+        default=9,
+        help="Maximum pixel noise allowed during model training.",
     )
 
     args = parser.parse_args()
 
-    process_qso(
+    # Initialize Parameters object with user inputs
+    params = Parameters(
+        loading_min_lambda=args.loading_min_lambda,
+        loading_max_lambda=args.loading_max_lambda,
+        normalization_min_lambda=args.normalization_min_lambda,
+        normalization_max_lambda=args.normalization_max_lambda,
+        min_lambda=args.min_lambda,
+        max_lambda=args.max_lambda,
+        dlambda=args.dlambda,
+        k=args.k,
+        max_noise_variance=args.max_noise_variance,
+    )
+
+    processor = DLAProcessor(
         spectra_filename=args.spectra_filename,
         zbest_filename=args.zbest_filename,
         learned_file=args.learned_file,
@@ -448,6 +495,7 @@ if __name__ == "__main__":
         dla_catalog=args.dla_catalog,
         dla_samples_file=args.dla_samples_file,
         sub_dla_samples_file=args.sub_dla_samples_file,
+        params=params,
         min_z_separation=args.min_z_separation,
         prev_tau_0=args.prev_tau_0,
         prev_beta=args.prev_beta,
@@ -456,3 +504,5 @@ if __name__ == "__main__":
         max_workers=args.max_workers,
         batch_size=args.batch_size,
     )
+
+    processor.process_all_spectra()
