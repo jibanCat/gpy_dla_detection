@@ -32,6 +32,10 @@ import argparse
 
 from gpy_dla_detection.process_helpers import initialize_results, save_results_to_hdf5
 
+from gpy_dla_detection.plottings.plot_model import (
+    plot_samples_vs_this_mu,
+    plot_real_spectrum_space,
+)
 
 # Namedtuple to store spectrum data
 SpectrumData = namedtuple(
@@ -338,7 +342,9 @@ def process_single_spectrum(
     if plot_figures:
         title = f"Spectrum {spectrum_id}; zQSO: {z_qso:.2f}"
         out_filename = f"spec-{str(idx).zfill(6)}"
-        make_plots(dla_gp, bayes, filename=out_filename, sub_dir="images", title=title)
+        plot_samples_vs_this_mu(
+            dla_gp, bayes, filename=out_filename, sub_dir="images", title=title
+        )
         plt.clf()
         plt.close()
 
