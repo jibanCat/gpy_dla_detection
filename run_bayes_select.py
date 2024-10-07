@@ -328,19 +328,33 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--learned_file",
-        required=True,
-        help="Learned QSO model file (e.g., learned_qso_model_lyseries.mat).",
+        default="data/dr12q/processed/learned_qso_model_lyseries_variance_kim_dr9q_minus_concordance.mat",
+        help="Learned QSO model file (default: learned_qso_model_lyseries_variance_kim_dr9q_minus_concordance.mat).",
     )
     parser.add_argument(
-        "--catalog_name", required=True, help="Catalog filename (e.g., catalog.mat)."
+        "--catalog_name",
+        default="data/dr12q/processed/catalog.mat",
+        help="Catalog filename (default: catalog.mat).",
     )
     parser.add_argument(
-        "--los_catalog", required=True, help="Line-of-sight catalog filename."
+        "--los_catalog",
+        default="data/dla_catalogs/dr9q_concordance/processed/los_catalog",
+        help="Line-of-sight catalog filename (default: los_catalog).",
     )
-    parser.add_argument("--dla_catalog", required=True, help="DLA catalog filename.")
-    parser.add_argument("--dla_samples_file", required=True, help="DLA samples file.")
     parser.add_argument(
-        "--sub_dla_samples_file", required=True, help="Sub-DLA samples file."
+        "--dla_catalog",
+        default="data/dla_catalogs/dr9q_concordance/processed/dla_catalog",
+        help="DLA catalog filename (default: dla_catalog).",
+    )
+    parser.add_argument(
+        "--dla_samples_file",
+        default="data/dr12q/processed/dla_samples_a03.mat",
+        help="DLA samples file (default: dla_samples_a03.mat).",
+    )
+    parser.add_argument(
+        "--sub_dla_samples_file",
+        default="data/dr12q/processed/subdla_samples.mat",
+        help="Sub-DLA samples file (default: subdla_samples.mat).",
     )
     parser.add_argument(
         "--min_z_separation",
