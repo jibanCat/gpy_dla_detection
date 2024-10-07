@@ -1,12 +1,15 @@
 #!/bin/bash
-#SBATCH --job-name=${JOB_NAME:-dla_detection}         # Job name, default is "dla_detection"
-#SBATCH --output=${OUTPUT_FILE:-gpdla_%j.log}         # Standard output log, default is "gpdla_%j.log"
-#SBATCH --error=${ERROR_FILE:-error_%j.log}           # Standard error log, default is "error_%j.log"
-#SBATCH --ntasks=1                                   # Number of tasks
-#SBATCH --cpus-per-task=${CPUS_PER_TASK:-32}          # CPUs allocated, default is 32
-#SBATCH --mem=${MEMORY:-64G}                          # Memory allocation, default is 64 GB
-#SBATCH --time=${TIME:-24:00:00}                      # Time limit, default is 24 hours
-#SBATCH --partition=${PARTITION:-normal}              # Partition name, default is "normal"
+#SBATCH --job-name=${JOB_NAME:-dla_detection}     # Job name, default is "dla_detection"
+#SBATCH --output=${OUTPUT_FILE:-gpdla_%j.log}     # Standard output log, default is "gpdla_%j.log"
+#SBATCH --error=${ERROR_FILE:-error_%j.log}       # Standard error log, default is "error_%j.log"
+#SBATCH --ntasks=${NTASKS:-32}                   # Number of tasks, default is 32
+#SBATCH --mem=${MEMORY:-64G}                      # Memory allocation, default is 64 GB
+#SBATCH --time=${TIME:-24:00:00}                  # Time limit, default is 24 hours
+#SBATCH --partition=${PARTITION:-normal}          # Partition name, default is "normal"
+
+# Comments:
+# The --ntasks parameter specifies the number of independent processes that will be run.
+# Modify --ntasks based on your job requirements.
 
 # Load DESI specific modules/environment
 source /global/cfs/cdirs/desi/software/desi_environment.sh 23.1
@@ -38,10 +41,10 @@ python run_bayes_select.py \
     --k ${K:-20} \                                                           # Rank of non-diagonal contribution
     --max_noise_variance ${MAX_NOISE_VARIANCE:-9}                            # Maximum pixel noise for training
 
-# Comments:
-# - All arguments have defaults as specified in the script, but they can be overridden when submitting the job.
-# - For example, you can submit the job with customized arguments like this:
-#   sbatch --export=ALL,JOB_NAME=my_dla_detection,CPUS_PER_TASK=16,MAX_DLAS=4,PARTITION=high submit_script.sh
+# Final notes:
+# - You can customize any of the script arguments using the `sbatch` command.
+# - Example: sbatch --export=ALL,NTASKS=16,SPECTRA_FILENAME=/path/to/spectra.fits submit_script.sh
+# - Ensure the number of workers (max_workers) is aligned with the number of tasks (ntasks).
 
 # exit the script
 exit 0
