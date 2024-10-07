@@ -24,7 +24,7 @@ from gpy_dla_detection.subdla_samples import SubDLASamplesMAT
 from gpy_dla_detection.bayesian_model_selection import BayesModelSelect
 from gpy_dla_detection.plottings.plot_model import plot_dla_model
 
-from desi_spectrum_reader import (
+from gpy_dla_detection.desi_spectrum_reader import (
     DESISpectrumReader,
 )  # Assuming you have DESISpectrumReader implemented
 from collections import namedtuple
@@ -47,6 +47,8 @@ def process_qso(
     dla_samples_file: str,
     sub_dla_samples_file: str,
     min_z_separation: float,
+    prev_tau_0: float,
+    prev_beta: float,
     max_dlas: int = 4,
     broadening: bool = True,
     plot_figures: bool = False,
@@ -76,6 +78,10 @@ def process_qso(
         The filename of the sub-DLA samples file.
     min_z_separation : float
         Minimum redshift separation for DLA models.
+    prev_tau_0 : float
+        The previous value of tau_0 for modeling the Lyman forest noise (default: 0.0023).
+    prev_beta : float
+        The previous value of beta for modeling the Lyman forest noise (default: 3.65).
     max_dlas : int, optional
         Maximum number of DLAs to model (default is 4).
     broadening : bool, optional
@@ -157,6 +163,8 @@ def process_qso(
             broadening,
             learned_file,
             min_z_separation,
+            prev_tau_0,
+            prev_beta,
             plot_figures,
             max_workers,
             batch_size,
@@ -192,6 +200,8 @@ def process_single_spectrum(
     broadening: bool,
     learned_file: str,
     min_z_separation: float,
+    prev_tau_0: float,
+    prev_beta: float,
     plot_figures: bool,
     max_workers: int,
     batch_size: int,
@@ -205,6 +215,8 @@ def process_single_spectrum(
         params,
         prior,
         learned_file,
+        prev_tau_0=prev_tau_0,
+        prev_beta=prev_beta,
     )
     gp.set_data(
         rest_wavelengths, flux, noise_variance, pixel_mask, z_qso, build_model=True
@@ -218,6 +230,8 @@ def process_single_spectrum(
         min_z_separation=min_z_separation,
         learned_file=learned_file,
         broadening=broadening,
+        prev_tau_0=prev_tau_0,
+        prev_beta=prev_beta,
     )
     dla_gp.set_data(
         rest_wavelengths, flux, noise_variance, pixel_mask, z_qso, build_model=True
@@ -231,6 +245,8 @@ def process_single_spectrum(
         min_z_separation=min_z_separation,
         learned_file=learned_file,
         broadening=broadening,
+        prev_tau_0=prev_tau_0,
+        prev_beta=prev_beta,
     )
     subdla_gp.set_data(
         rest_wavelengths, flux, noise_variance, pixel_mask, z_qso, build_model=True
@@ -250,7 +266,6 @@ def process_single_spectrum(
     results["log_likelihoods_dla"][idx, :] = bayes.log_likelihoods[-max_dlas:]
     results["log_posteriors_no_dla"][idx] = bayes.log_posteriors[0]
     results["log_posteriors_dla"][idx, :] = bayes.log_posteriors[-max_dlas:]
-
     results["sample_log_likelihoods_dla"][idx, :, :] = dla_gp.sample_log_likelihoods
     results["base_sample_inds"][idx, :, :] = dla_gp.base_sample_inds
 
@@ -271,78 +286,6 @@ def process_single_spectrum(
         make_plots(dla_gp, bayes, filename=out_filename, sub_dir="images", title=title)
         plt.clf()
         plt.close()
-
-
-def initialize_results(num_spectra: int, max_dlas: int, num_dla_samples: int) -> dict:
-    """
-    Initialize arrays for storing the results of the Bayesian model selection.
-    """
-    results = {
-        "min_z_dlas": np.full((num_spectra,), np.nan),
-        "max_z_dlas": np.full((num_spectra,), np.nan),
-        "log_priors_no_dla": np.full((num_spectra,), np.nan),
-        "log_priors_dla": np.full((num_spectra, max_dlas), np.nan),
-        "log_likelihoods_no_dla": np.full((num_spectra,), np.nan),
-        "log_likelihoods_dla": np.full((num_spectra, max_dlas), np.nan),
-        "log_posteriors_no_dla": np.full((num_spectra,), np.nan),
-        "log_posteriors_dla": np.full((num_spectra, max_dlas), np.nan),
-        "sample_log_likelihoods_dla": np.full(
-            (num_spectra, num_dla_samples, max_dlas), np.nan
-        ),
-        "base_sample_inds": np.zeros(
-            (num_spectra, num_dla_samples, max_dlas - 1), dtype=np.int32
-        ),
-        "MAP_z_dlas": np.full((num_spectra, max_dlas, max_dlas), np.nan),
-        "MAP_log_nhis": np.full((num_spectra, max_dlas, max_dlas), np.nan),
-        "model_posteriors": np.full((num_spectra, 1 + 1 + max_dlas), np.nan),
-        "p_dlas": np.full((num_spectra,), np.nan),
-        "p_no_dlas": np.full((num_spectra,), np.nan),
-    }
-    return results
-
-
-def save_results_to_hdf5(
-    filename: str, results: dict, spectrum_ids: List[str], z_qso_list: List[float]
-):
-    """
-    Save the results of the spectrum processing into an HDF5 file.
-    """
-    with h5py.File(filename, "w") as f:
-        for key, data in results.items():
-            f.create_dataset(key, data=data)
-        f.create_dataset("z_qsos", data=np.array(z_qso_list))
-        f.create_dataset(
-            "spectrum_ids",
-            data=np.array(spectrum_ids, dtype=h5py.string_dtype(encoding="utf-8")),
-        )
-
-
-def make_plots(
-    dla_gp: DLAGPMAT,
-    bayes: BayesModelSelect,
-    filename: str = "spec.pdf",
-    sub_dir: str = "images",
-    title: str = "",
-):
-    """
-    Generate plots of the GP mean model and the sample likelihood plots.
-    """
-    title += f"P(DLA | D) = {', '.join([f'{x:.2g}' for x in bayes.model_posteriors])}"
-
-    if not os.path.exists(sub_dir):
-        os.makedirs(sub_dir)
-
-    # Find the model with the highest posterior and plot it
-    ind = np.argmax(bayes.model_posteriors)
-    nth_dla = ind - bayes.dla_model_ind + 1
-
-    if nth_dla <= 0:
-        label = f"P(no DLA | D) = {bayes.p_no_dla:.2g}"
-    else:
-        label = f"P(DLA({nth_dla}) | D) = {bayes.model_posteriors[ind]:.2g}"
-
-    plot_dla_model(dla_gp=dla_gp, nth_dla=nth_dla, title=title, label=label)
-    plt.savefig(os.path.join(sub_dir, f"{filename}.pdf"), format="pdf", dpi=100)
 
 
 if __name__ == "__main__":
@@ -397,6 +340,18 @@ if __name__ == "__main__":
         help="Minimum redshift separation for DLA models (default: 3000.0).",
     )
     parser.add_argument(
+        "--prev_tau_0",
+        type=float,
+        default=0.0023,
+        help="Previous value for tau_0 (default: 0.0023).",
+    )
+    parser.add_argument(
+        "--prev_beta",
+        type=float,
+        default=3.65,
+        help="Previous value for beta (default: 3.65).",
+    )
+    parser.add_argument(
         "--max_dlas",
         type=int,
         default=4,
@@ -433,6 +388,8 @@ if __name__ == "__main__":
         dla_samples_file=args.dla_samples_file,
         sub_dla_samples_file=args.sub_dla_samples_file,
         min_z_separation=args.min_z_separation,
+        prev_tau_0=args.prev_tau_0,
+        prev_beta=args.prev_beta,
         max_dlas=args.max_dlas,
         plot_figures=bool(args.plot_figures),
         max_workers=args.max_workers,
