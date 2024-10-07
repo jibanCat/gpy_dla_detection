@@ -1,4 +1,6 @@
 #!/bin/bash
+#SBATCH --account=desi               # Account name, default is "desi"
+#SBATCH --nodes=1                    # Number of nodes, default is 1
 #SBATCH --job-name=dla_detection     # Job name, default is "dla_detection"
 #SBATCH --output=gpdla_%j.log        # Standard output log, default is "gpdla_%j.log"
 #SBATCH --error=error_%j.log         # Standard error log, default is "error_%j.log"
