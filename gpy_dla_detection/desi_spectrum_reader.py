@@ -82,7 +82,7 @@ class DESISpectrumReader:
                 wavelengths=wavelengths_sorted,
                 flux=flux_sorted,
                 noise_variance=noise_variance_sorted,
-                pixel_mask=pixel_mask_sorted,
+                pixel_mask=np.bool_(pixel_mask_sorted),
             )
 
     def read_redshift_catalog(self):
