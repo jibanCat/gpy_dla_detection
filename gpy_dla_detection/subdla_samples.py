@@ -2,6 +2,7 @@
 subdla_samples.py : generate the Quasi-Monte Carlo samples for
 calculating log model evidence of subDLA model
 """
+
 import numpy as np
 import h5py
 from .set_parameters import Parameters
@@ -13,7 +14,7 @@ class SubDLASamples(DLASamples):
     """
     A class to generate and store the QMC samples for DLAs:
     theta = (z_dla, logNHI) = (redshift of DLA, column density of DLA)
-    
+
     :attr offset_samples: used for z_lls samples
     :attr nhi_samples: nhi samples for subDLAs
 
@@ -51,14 +52,14 @@ class SubDLASamples(DLASamples):
     @property
     def Z_lls(self):
         """
-        the normalization factor (partition function) of subDLA logNHI prior. 
+        the normalization factor (partition function) of subDLA logNHI prior.
         """
         NotImplementedError
 
     @property
     def Z_dla(self):
         """
-        the normalization factor (partition function) of DLA logNHI prior. 
+        the normalization factor (partition function) of DLA logNHI prior.
         """
         NotImplementedError
 
@@ -123,3 +124,9 @@ class SubDLASamplesMAT(SubDLASamples):
         )
 
         return sample_z_lls
+
+    def sample_z_dlas(self, wavelengths: np.ndarray, z_qso: float) -> np.ndarray:
+        """
+        Sample redshifts for DLAs -- placeholder for now, the same as sample_z_lls.
+        """
+        return self.sample_z_lls(wavelengths, z_qso)
