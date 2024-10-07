@@ -42,7 +42,6 @@ SpectrumData = namedtuple(
 def process_qso(
     spectra_filename: str,
     zbest_filename: str,
-    learned_file: str,
     catalog_name: str,
     los_catalog: str,
     dla_catalog: str,
@@ -66,8 +65,6 @@ def process_qso(
         The filename of the DESI spectra FITS file.
     zbest_filename : str
         The filename of the DESI redshift catalog (zbest-*.fits).
-    learned_file : str
-        The filename of the learned QSO model file.
     catalog_name : str
         The filename of the catalog file.
     los_catalog : str
@@ -81,9 +78,9 @@ def process_qso(
     min_z_separation : float
         Minimum redshift separation for DLA models.
     prev_tau_0 : float
-        The previous value of tau_0 for modeling the Lyman forest noise (default: 0.0023).
+        The previous value of tau_0 for modeling the Lyman forest noise.
     prev_beta : float
-        The previous value of beta for modeling the Lyman forest noise (default: 3.65).
+        The previous value of beta for modeling the Lyman forest noise.
     max_dlas : int, optional
         Maximum number of DLAs to model (default is 4).
     broadening : bool, optional
@@ -145,7 +142,30 @@ def process_qso(
         # Convert wavelengths to rest-frame
         rest_wavelengths = params.emitted_wavelengths(wavelengths, z_qso)
 
-        # Process the spectrum using Null, DLA, and subDLA models
+        # Instantiate the models once for all spectra
+        null_gp = NullGPMAT(params, prior, prev_tau_0=prev_tau_0, prev_beta=prev_beta)
+
+        dla_gp = DLAGPMAT(
+            params=params,
+            prior=prior,
+            dla_samples=dla_samples,
+            min_z_separation=min_z_separation,
+            broadening=broadening,
+            prev_tau_0=prev_tau_0,
+            prev_beta=prev_beta,
+        )
+
+        subdla_gp = SubDLAGPMAT(
+            params=params,
+            prior=prior,
+            dla_samples=subdla_samples,
+            min_z_separation=min_z_separation,
+            broadening=broadening,
+            prev_tau_0=prev_tau_0,
+            prev_beta=prev_beta,
+        )
+
+        # Process the spectrum using the instantiated models
         process_single_spectrum(
             idx,
             spectrum_id,
@@ -163,10 +183,10 @@ def process_qso(
             results,
             max_dlas,
             broadening,
-            learned_file,
+            null_gp,  # Pass the NullGPMAT object
+            dla_gp,  # Pass the DLAGPMAT object
+            subdla_gp,  # Pass the SubDLAGPMAT object
             min_z_separation,
-            prev_tau_0,
-            prev_beta,
             plot_figures,
             max_workers,
             batch_size,
@@ -200,7 +220,9 @@ def process_single_spectrum(
     results: dict,
     max_dlas: int,
     broadening: bool,
-    learned_file: str,
+    gp: NullGPMAT,  # Pass already initialized NullGPMAT
+    dla_gp: DLAGPMAT,  # Pass already initialized DLAGPMAT
+    subdla_gp: SubDLAGPMAT,  # Pass already initialized SubDLAGPMAT
     min_z_separation: float,
     prev_tau_0: float,
     prev_beta: float,
@@ -209,47 +231,73 @@ def process_single_spectrum(
     batch_size: int,
 ):
     """
-    Process a single spectrum using Null, DLA, and subDLA models.
+    Process a single spectrum using pre-initialized Null, DLA, and SubDLA models.
+
+    Parameters:
+    ----------
+    idx : int
+        Index of the spectrum being processed.
+    spectrum_id : str
+        Identifier of the spectrum being processed.
+    z_qso : float
+        Redshift of the quasar for the spectrum.
+    wavelengths : np.ndarray
+        Observed wavelengths of the spectrum.
+    rest_wavelengths : np.ndarray
+        Rest-frame wavelengths of the spectrum.
+    flux : np.ndarray
+        Flux values of the spectrum.
+    noise_variance : np.ndarray
+        Noise variance per pixel in the spectrum.
+    pixel_mask : np.ndarray
+        Mask indicating which pixels are flagged as bad or good.
+    params : Parameters
+        Parameters instance for the analysis.
+    prior : PriorCatalog
+        Prior catalog instance for the analysis.
+    dla_samples : DLASamplesMAT
+        DLA samples data for the analysis.
+    subdla_samples : SubDLASamplesMAT
+        SubDLA samples data for the analysis.
+    bayes : BayesModelSelect
+        Bayesian model selection object for DLA detection.
+    results : dict
+        Dictionary to store the results.
+    max_dlas : int
+        Maximum number of DLAs to model.
+    broadening : bool
+        Whether to include instrumental broadening.
+    gp : NullGPMAT
+        Pre-initialized NullGPMAT object.
+    dla_gp : DLAGPMAT
+        Pre-initialized DLAGPMAT object.
+    subdla_gp : SubDLAGPMAT
+        Pre-initialized SubDLAGPMAT object.
+    min_z_separation : float
+        Minimum redshift separation for DLA models.
+    prev_tau_0 : float
+        Tau parameter for modeling the Lyman forest noise.
+    prev_beta : float
+        Beta parameter for modeling the Lyman forest noise.
+    plot_figures : bool
+        If True, generates plots for each processed spectrum.
+    max_workers : int
+        Number of workers for parallel processing.
+    batch_size : int
+        Batch size for parallel model evidence computation.
     """
 
-    # Null model (no DLAs)
-    gp = NullGPMAT(
-        params,
-        prior,
-        learned_file,
-        prev_tau_0=prev_tau_0,
-        prev_beta=prev_beta,
-    )
+    # Set data for the Null model (no DLAs)
     gp.set_data(
         rest_wavelengths, flux, noise_variance, pixel_mask, z_qso, build_model=True
     )
 
-    # DLA model (up to max DLAs)
-    dla_gp = DLAGPMAT(
-        params=params,
-        prior=prior,
-        dla_samples=dla_samples,
-        min_z_separation=min_z_separation,
-        learned_file=learned_file,
-        broadening=broadening,
-        prev_tau_0=prev_tau_0,
-        prev_beta=prev_beta,
-    )
+    # Set data for the DLA model (up to max DLAs)
     dla_gp.set_data(
         rest_wavelengths, flux, noise_variance, pixel_mask, z_qso, build_model=True
     )
 
-    # Sub-DLA model
-    subdla_gp = SubDLAGPMAT(
-        params=params,
-        prior=prior,
-        dla_samples=subdla_samples,
-        min_z_separation=min_z_separation,
-        learned_file=learned_file,
-        broadening=broadening,
-        prev_tau_0=prev_tau_0,
-        prev_beta=prev_beta,
-    )
+    # Set data for the Sub-DLA model
     subdla_gp.set_data(
         rest_wavelengths, flux, noise_variance, pixel_mask, z_qso, build_model=True
     )
