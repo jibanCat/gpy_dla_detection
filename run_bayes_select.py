@@ -30,6 +30,8 @@ from gpy_dla_detection.desi_spectrum_reader import (
 from collections import namedtuple
 import argparse
 
+from gpy_dla_detection.process_helpers import initialize_results, save_results_to_hdf5
+
 
 # Namedtuple to store spectrum data
 SpectrumData = namedtuple(
