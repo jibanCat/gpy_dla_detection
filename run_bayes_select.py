@@ -26,7 +26,7 @@ from gpy_dla_detection.plottings.plot_model import plot_dla_model
 
 from gpy_dla_detection.desi_spectrum_reader import (
     DESISpectrumReader,
-)  # Assuming you have DESISpectrumReader implemented
+)
 from collections import namedtuple
 import argparse
 
@@ -42,6 +42,7 @@ SpectrumData = namedtuple(
 def process_qso(
     spectra_filename: str,
     zbest_filename: str,
+    learned_file: str,
     catalog_name: str,
     los_catalog: str,
     dla_catalog: str,
@@ -65,6 +66,8 @@ def process_qso(
         The filename of the DESI spectra FITS file.
     zbest_filename : str
         The filename of the DESI redshift catalog (zbest-*.fits).
+    learned_file : str
+        The filename of the learned QSO model file.
     catalog_name : str
         The filename of the catalog file.
     los_catalog : str
@@ -143,13 +146,20 @@ def process_qso(
         rest_wavelengths = params.emitted_wavelengths(wavelengths, z_qso)
 
         # Instantiate the models once for all spectra
-        null_gp = NullGPMAT(params, prior, prev_tau_0=prev_tau_0, prev_beta=prev_beta)
+        null_gp = NullGPMAT(
+            params,
+            prior,
+            learned_file=learned_file,
+            prev_tau_0=prev_tau_0,
+            prev_beta=prev_beta,
+        )
 
         dla_gp = DLAGPMAT(
             params=params,
             prior=prior,
             dla_samples=dla_samples,
             min_z_separation=min_z_separation,
+            learned_file=learned_file,
             broadening=broadening,
             prev_tau_0=prev_tau_0,
             prev_beta=prev_beta,
@@ -160,6 +170,7 @@ def process_qso(
             prior=prior,
             dla_samples=subdla_samples,
             min_z_separation=min_z_separation,
+            learned_file=learned_file,
             broadening=broadening,
             prev_tau_0=prev_tau_0,
             prev_beta=prev_beta,
@@ -224,8 +235,6 @@ def process_single_spectrum(
     dla_gp: DLAGPMAT,  # Pass already initialized DLAGPMAT
     subdla_gp: SubDLAGPMAT,  # Pass already initialized SubDLAGPMAT
     min_z_separation: float,
-    prev_tau_0: float,
-    prev_beta: float,
     plot_figures: bool,
     max_workers: int,
     batch_size: int,
@@ -275,10 +284,6 @@ def process_single_spectrum(
         Pre-initialized SubDLAGPMAT object.
     min_z_separation : float
         Minimum redshift separation for DLA models.
-    prev_tau_0 : float
-        Tau parameter for modeling the Lyman forest noise.
-    prev_beta : float
-        Beta parameter for modeling the Lyman forest noise.
     plot_figures : bool
         If True, generates plots for each processed spectrum.
     max_workers : int
