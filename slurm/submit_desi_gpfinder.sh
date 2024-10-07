@@ -1,15 +1,12 @@
 #!/bin/bash
-#SBATCH --job-name=${JOB_NAME:-dla_detection}     # Job name, default is "dla_detection"
-#SBATCH --output=${OUTPUT_FILE:-gpdla_%j.log}     # Standard output log, default is "gpdla_%j.log"
-#SBATCH --error=${ERROR_FILE:-error_%j.log}       # Standard error log, default is "error_%j.log"
-#SBATCH --ntasks=${NTASKS:-32}                   # Number of tasks, default is 32
-#SBATCH --mem=${MEMORY:-64G}                      # Memory allocation, default is 64 GB
-#SBATCH --time=${TIME:-24:00:00}                  # Time limit, default is 24 hours
-#SBATCH --partition=${PARTITION:-normal}          # Partition name, default is "normal"
+#SBATCH --job-name=dla_detection     # Job name, default is "dla_detection"
+#SBATCH --output=gpdla_%j.log        # Standard output log, default is "gpdla_%j.log"
+#SBATCH --error=error_%j.log         # Standard error log, default is "error_%j.log"
+#SBATCH --ntasks=32                  # Number of tasks, default is 32
+#SBATCH --mem=64G                    # Memory allocation, default is 64 GB
+#SBATCH --time=00:30:00              # Time limit
+#SBATCH --partition=normal           # Partition name, default is "normal"
 
-# Comments:
-# The --ntasks parameter specifies the number of independent processes that will be run.
-# Modify --ntasks based on your job requirements.
 
 # Load DESI specific modules/environment
 source /global/cfs/cdirs/desi/software/desi_environment.sh 23.1
@@ -41,10 +38,10 @@ python run_bayes_select.py \
     --k ${K:-20} \                                                           # Rank of non-diagonal contribution
     --max_noise_variance ${MAX_NOISE_VARIANCE:-9}                            # Maximum pixel noise for training
 
-# Final notes:
-# - You can customize any of the script arguments using the `sbatch` command.
-# - Example: sbatch --export=ALL,NTASKS=16,SPECTRA_FILENAME=/path/to/spectra.fits submit_script.sh
-# - Ensure the number of workers (max_workers) is aligned with the number of tasks (ntasks).
+# Comments:
+# - You can submit this script via `sbatch`, and dynamically provide new arguments like `NTASKS`, `SPECTRA_FILENAME`, etc.
+# - Example usage: `sbatch --export=ALL,NTASKS=16,SPECTRA_FILENAME=/new/path/spectra.fits submit_script.sh`
+# - The defaults for each argument can be modified or left as is.
 
-# exit the script
+# End of script
 exit 0
