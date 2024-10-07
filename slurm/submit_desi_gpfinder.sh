@@ -42,3 +42,6 @@ python run_bayes_select.py \
 # - All arguments have defaults as specified in the script, but they can be overridden when submitting the job.
 # - For example, you can submit the job with customized arguments like this:
 #   sbatch --export=ALL,JOB_NAME=my_dla_detection,CPUS_PER_TASK=16,MAX_DLAS=4,PARTITION=high submit_script.sh
+
+# exit the script
+exit 0
