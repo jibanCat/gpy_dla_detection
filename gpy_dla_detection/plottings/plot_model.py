@@ -4,6 +4,7 @@ Plot the GP model with sample likelihoods
 
 from typing import Optional
 
+import os
 import numpy as np
 from matplotlib import pyplot as plt
 
