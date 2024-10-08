@@ -28,10 +28,10 @@ source /global/cfs/cdirs/desi/software/desi_environment.sh 23.1
 # Set default arguments if not provided
 SPECTRA_FILENAME="${SPECTRA_FILENAME:-/path/to/spectra.fits}"
 ZBEST_FILENAME="${ZBEST_FILENAME:-/path/to/zbest.fits}"
-LEARNED_FILE="${LEARNED_FILE:-data/dr12q/processed/learned_qso_model_lyseries_variance.mat}"
+LEARNED_FILE="${LEARNED_FILE:-data/dr12q/processed/learned_qso_model_lyseries_variance_wmu_boss_dr16q_minus_dr12q_gp_851-1421.mat}"
 CATALOG_NAME="${CATALOG_NAME:-data/dr12q/processed/catalog.mat}"
-LOS_CATALOG="${LOS_CATALOG:-data/dla_catalogs/processed/los_catalog}"
-DLA_CATALOG="${DLA_CATALOG:-data/dla_catalogs/processed/dla_catalog}"
+LOS_CATALOG="${LOS_CATALOG:-data/dla_catalogs/dr9q_concordance/processed/los_catalog}"
+DLA_CATALOG="${DLA_CATALOG:-data/dla_catalogs/dr9q_concordance/processed/dla_catalog}"
 DLA_SAMPLES_FILE="${DLA_SAMPLES_FILE:-data/dr12q/processed/dla_samples_a03.mat}"
 SUB_DLA_SAMPLES_FILE="${SUB_DLA_SAMPLES_FILE:-data/dr12q/processed/subdla_samples.mat}"
 MIN_Z_SEPARATION="${MIN_Z_SEPARATION:-3000.0}"

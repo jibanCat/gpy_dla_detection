@@ -356,7 +356,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--learned_file",
-        default="data/dr12q/processed/learned_qso_model_lyseries_variance.mat",
+        default="data/dr12q/processed/learned_qso_model_lyseries_variance_wmu_boss_dr16q_minus_dr12q_gp_851-1421.mat",
         help="Learned QSO model file path.",
     )
     parser.add_argument(
@@ -366,12 +366,12 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--los_catalog",
-        default="data/dla_catalogs/processed/los_catalog",
+        default="data/dla_catalogs/dr9q_concordance/processed/los_catalog",
         help="Line-of-sight catalog file path.",
     )
     parser.add_argument(
         "--dla_catalog",
-        default="data/dla_catalogs/processed/dla_catalog",
+        default="data/dla_catalogs/dr9q_concordance/processed/dla_catalog",
         help="DLA catalog file path.",
     )
     parser.add_argument(
