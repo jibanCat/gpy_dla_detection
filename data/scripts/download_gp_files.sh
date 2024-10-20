@@ -2,7 +2,7 @@
 
 # Define the GitHub repository and the target folder
 REPO_URL="https://github.com/jibanCat/gp_dr12_trained.git"
-TARGET_FOLDER="data/dr12q/processed"
+TARGET_FOLDER="../../dr12q/processed"
 
 # Clone the repository
 echo "Cloning the repository..."
