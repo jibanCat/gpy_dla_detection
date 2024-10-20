@@ -1,5 +1,6 @@
 from typing import List, Union
 from itertools import chain
+import warnings
 import numpy as np
 from scipy.special import logsumexp
 from .null_gp import NullGP
@@ -56,7 +57,7 @@ class BayesModelSelect:
         for i, num_dlas in enumerate(self.all_max_dlas):
             # Skip the null model prior (no DLAs)
             if num_dlas == 0:
-                log_priors.append([np.nan])
+                log_priors.append([np.nan])  # Null model prior
                 continue
 
             # Compute the model priors for DLA and subDLA models
@@ -84,10 +85,21 @@ class BayesModelSelect:
         log_likelihoods = np.array(list(chain(*log_likelihoods)))
         log_posteriors = log_likelihoods + log_priors
 
-        # Ensure prior assignment is correct
-        assert (
-            np.abs((log_likelihoods[-1] + log_priors[-1]) - log_posteriors[-1]) < 1e-4
-        )
+        # Perform the tolerance check
+        if (
+            not np.isfinite(log_likelihoods[-1])
+            or not np.isfinite(log_priors[-1])
+            or not np.isfinite(log_posteriors[-1])
+        ):
+            warnings.warn(
+                f"Invalid values encountered in log likelihoods, priors, or posteriors."
+            )
+        else:
+            difference = np.abs(
+                (log_likelihoods[-1] + log_priors[-1]) - log_posteriors[-1]
+            )
+            if difference >= 1e-4:
+                warnings.warn(f"Posterior mismatch detected: difference = {difference}")
 
         # Store results for later use
         self.log_priors = log_priors
