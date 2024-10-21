@@ -13,7 +13,15 @@ import h5py
 from .set_parameters import Parameters
 from .model_priors import PriorCatalog
 from .dla_gp import DLAGP
-from .voigt import voigt_absorption
+
+# Attempt to import VoigtProfile from voigt_fast, and fall back to voigt if it fails
+try:
+    from .voigt_fast import VoigtProfile
+
+    voigt_absorption = VoigtProfile().compute_voigt_profile
+except ImportError:
+    from .voigt import voigt_absorption
+
 from .subdla_samples import SubDLASamplesMAT  # for convenient autocomplete
 
 

@@ -18,12 +18,14 @@ from .set_parameters import Parameters
 from .model_priors import PriorCatalog
 from .null_gp import NullGP
 
-# from .voigt import voigt_absorption
-# from .voigt_jit import compute_voigt_absorption as voigt_absorption
+# Attempt to import VoigtProfile from voigt_fast, and fall back to voigt if it fails
+try:
+    from .voigt_fast import VoigtProfile
 
-from .voigt_fast import VoigtProfile
-
-voigt_absorption = VoigtProfile().compute_voigt_profile
+    voigt_absorption = VoigtProfile().compute_voigt_profile
+# OSError, ImportError:
+except (OSError, ImportError):
+    from .voigt import voigt_absorption
 
 # this could be replaced to DLASamples in the future;
 # I import this is for the convenient of my autocomplete

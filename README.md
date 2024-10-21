@@ -1,4 +1,4 @@
-# DLA detection pipleine for BOSS quasar spectra, **in Python**
+# GP-DLA finder for DESI quasar spectra, in Python
 
 ![rainbow_dlas](https://jibancat.github.io/images/RdBu_dlas.png)
 
@@ -31,6 +31,53 @@ First we download the raw catalog data (requires both `wget` and `gawk`):
     cd data/scripts
     ./download_catalogs.sh
     ./download_gp_files.sh
+
+## Compilation and Installation Guide for C Helper Functions
+
+> Warning: If you don't compile the C voigt function, you automatically fall back to the slower Python version.
+
+The processing code uses a C helper function `gpy_dla_detection/ctypes_voigt.c` to efficiently compute Voigt profiles. This requires the `libcerf` library to be installed. Below are the steps for compiling `libcerf` from source and setting up the environment.
+
+1. Step 1: Compile `libcerf` from Source
+
+Navigate to your home directory:
+
+```bash
+cd $HOME
+git clone https://jugit.fz-juelich.de/mlz/libcerf.git
+cd libcerf
+mkdir build
+cd build
+cmake ..
+make
+ctest
+make install DESTDIR=~/.local/
+```
+
+2. Step 2: Compile the C Helper Function
+
+Navigate to the directory where the `desi_gpy_dla_detection` repository is located:
+
+```bash
+cd /path/to/desi_gpy_dla_detection/gpy_dla_detection
+```
+
+Compile the C file using the installed `libcerf`:
+
+```bash
+cc -fPIC -shared -o _voigt.so ctypes_voigt.c -I$HOME/.local/usr/local/include -L$HOME/.local/usr/local/lib64 -lcerf
+```
+
+3. Step 3: Set Up the Environment
+
+Update the LD_LIBRARY_PATH to include the path to the compiled libcerf library:
+
+```bash
+echo 'export LD_LIBRARY_PATH=$HOME/.local/usr/local/lib64:$LD_LIBRARY_PATH' >> ~/.bashrc
+```
+
+- Replace `/path/to/desi_gpy_dla_detection` with the actual path where the code repository is located.
+- Ensure that the cc compiler and other necessary build tools (like `cmake`) are installed on your system.
 
 ## Run GP DLA finder for DESI like .fits file
 
@@ -94,7 +141,7 @@ python run_bayes_select.py \
 ```
 
 Each DESI `.fits` file has multiple spectra. The output of this script is a DLA catalog for all spectra in that `.fits` file.
-You probably can re-deign the whole pipeline for multiple `.fits` file but I am not that familiar with DESI data structure at the moment.
+You probably can re-design the whole pipeline for multiple `.fits` file, but I am not that familiar with DESI data structure at the moment.
 
 ## For developers
 
