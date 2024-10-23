@@ -19,6 +19,10 @@ import constants
 
 from desiutil.log import log
 
+# GP-DLA imports
+from run_bayes_select import DLAHolder
+from gpy_dla_detection.set_parameters import Parameters
+
 
 def parse(options=None):
     parser = argparse.ArgumentParser(
@@ -87,23 +91,6 @@ def parse(options=None):
     )
 
     parser.add_argument(
-        "-m",
-        "--model",
-        type=str,
-        default="./models/QSO-HIZv1.1_RR.npz",
-        required=False,
-        help="path to intrinsic flux model",
-    )
-
-    parser.add_argument(
-        "--varlss",
-        type=str,
-        default="./lss_variance/jura-var-lss.fits",
-        required=False,
-        help="path to LSS variance input files",
-    )
-
-    parser.add_argument(
         "--balmask",
         default=False,
         required=False,
@@ -129,6 +116,136 @@ def parse(options=None):
         help="number of multiprocressing processes to use, default is 64",
     )
 
+    ###======== GP-DLA specific arguments =========###
+
+    # Spectra and file-related arguments
+    parser.add_argument(
+        "--spectra_filename",
+        required=True,
+        help="DESI spectra FITS filename (e.g., spectra-*.fits).",
+    )
+    parser.add_argument(
+        "--zbest_filename",
+        required=True,
+        help="DESI redshift catalog filename (zbest-*.fits).",
+    )
+    parser.add_argument(
+        "--learned_file",
+        default="data/dr12q/processed/learned_qso_model_lyseries_variance_wmu_boss_dr16q_minus_dr12q_gp_851-1421.mat",
+        help="Learned QSO model file path.",
+    )
+    parser.add_argument(
+        "--catalog_name",
+        default="data/dr12q/processed/catalog.mat",
+        help="Catalog file path.",
+    )
+    parser.add_argument(
+        "--los_catalog",
+        default="data/dla_catalogs/dr9q_concordance/processed/los_catalog",
+        help="Line-of-sight catalog file path.",
+    )
+    parser.add_argument(
+        "--dla_catalog",
+        default="data/dla_catalogs/dr9q_concordance/processed/dla_catalog",
+        help="DLA catalog file path.",
+    )
+    parser.add_argument(
+        "--dla_samples_file",
+        default="data/dr12q/processed/dla_samples_a03.mat",
+        help="DLA samples file path.",
+    )
+    parser.add_argument(
+        "--sub_dla_samples_file",
+        default="data/dr12q/processed/subdla_samples.mat",
+        help="Sub-DLA samples file path.",
+    )
+
+    # DLA-related arguments
+    parser.add_argument(
+        "--min_z_separation",
+        type=float,
+        default=3000.0,
+        help="Minimum redshift separation for DLA models.",
+    )
+    parser.add_argument(
+        "--prev_tau_0", type=float, default=0.00554, help="Previous value for tau_0."
+    )
+    parser.add_argument(
+        "--prev_beta", type=float, default=3.182, help="Previous value for beta."
+    )
+    parser.add_argument(
+        "--max_dlas", type=int, default=3, help="Maximum number of DLAs to model."
+    )
+    parser.add_argument(
+        "--plot_figures",
+        type=int,
+        default=0,
+        help="Set to 1 to generate plots, 0 otherwise.",
+    )
+    parser.add_argument(
+        "--max_workers",
+        type=int,
+        default=32,
+        help="Number of workers for parallel processing.",
+    )
+    parser.add_argument(
+        "--batch_size",
+        type=int,
+        default=313,
+        help="Batch size for parallel model evidence computation.",
+    )
+
+    # Parameter-related arguments
+    # These are the values used in the trained GP model, don't change them unless you change the trained model
+    parser.add_argument(
+        "--loading_min_lambda",
+        type=float,
+        default=800,
+        help="Range of rest wavelengths to load (Å).",
+    )
+    parser.add_argument(
+        "--loading_max_lambda",
+        type=float,
+        default=1550,
+        help="Range of rest wavelengths to load (Å).",
+    )
+    parser.add_argument(
+        "--normalization_min_lambda",
+        type=float,
+        default=1425,
+        help="Range of rest wavelengths for flux normalization.",
+    )
+    parser.add_argument(
+        "--normalization_max_lambda",
+        type=float,
+        default=1475,
+        help="Range of rest wavelengths for flux normalization.",
+    )
+    parser.add_argument(
+        "--min_lambda",
+        type=float,
+        default=850.75,
+        help="Range of rest wavelengths to model (Å).",
+    )
+    parser.add_argument(
+        "--max_lambda",
+        type=float,
+        default=1420.75,
+        help="Range of rest wavelengths to model (Å).",
+    )
+    parser.add_argument(
+        "--dlambda", type=float, default=0.25, help="Separation of wavelength grid (Å)."
+    )
+    parser.add_argument(
+        "--k", type=int, default=20, help="Rank of non-diagonal contribution."
+    )
+    parser.add_argument(
+        "--max_noise_variance",
+        type=float,
+        default=9,
+        help="Maximum pixel noise allowed during model training.",
+    )
+
     if options is None:
         args = parser.parse_args()
     else:
@@ -146,24 +263,19 @@ def main(args=None):
     if not os.path.isfile(args.qsocat):
         log.error(f"{args.qsocat} does not exist")
         exit(1)
+
     # if catalog is healpix based, we must have program & survey
     if not (args.tilebased) and not (args.mocks):
         log.info(
             f"expecting healpix catalog for redux={args.release}, survey={args.survey}, program={args.program}; confirm this matches the catalog provided!"
         )
+
     # confirm bal masking choice
     if not (args.balmask):
         log.warning(
             f"BALs will not be masked! The only good reason to do this is if you do not have a BAL catalog, set --balmask to turn on masking."
         )
-    # check the model file exits
-    if not os.path.isfile(args.model):
-        log.error(f"cannot not find flux model file, looking for {args.model}")
-        exit(1)
-    # check if LSS file exits
-    if not os.path.isfile(args.varlss):
-        log.error(f"cannot find LSS variance file, looking for {args.varlss}")
-        exit(1)
+
     # check if mock data
     if args.mocks and (args.mockdir is None):
         log.error(f"mocks argument set to true but no mock data path provided")
@@ -174,19 +286,47 @@ def main(args=None):
     tini = time.time()
 
     # read in quasar catalog and intrinsic flux model
+    # TODO: Get the total number of spectra
+    # For real data, count the number of healpix pixels
+    # For mock data, count the number of level1 folders
     if args.mocks:
         catalog = read_mock_catalog(args.qsocat, args.balmask, args.mockdir)
+        num_spectra  # TODO: count from the number of level1 folders
     else:
         catalog = read_catalog(args.qsocat, args.balmask, args.tilebased)
+        num_spectra  # TODO: count from the number of healpix pixels
 
-    model = np.load(args.model)
-    fluxmodel = dict()
-    fluxmodel["PCA_COMP"] = model["PCA_COMP"]
-    fluxmodel["PCA_WAVE"] = 10 ** model["LOGLAM"]
-    fluxmodel["IGM"] = model["IGM"][0]
-
-    # add lss variance info to dictionary for forest fitting
-    fluxmodel = read_varlss(args.varlss, fluxmodel)
+    # TODO: Set up the GP-DLA model
+    # Initialize Parameters object with user inputs
+    params = Parameters(
+        loading_min_lambda=args.loading_min_lambda,
+        loading_max_lambda=args.loading_max_lambda,
+        normalization_min_lambda=args.normalization_min_lambda,
+        normalization_max_lambda=args.normalization_max_lambda,
+        min_lambda=args.min_lambda,
+        max_lambda=args.max_lambda,
+        dlambda=args.dlambda,
+        k=args.k,
+        max_noise_variance=args.max_noise_variance,
+    )
+    # This is the GP-DLA processor which can be reused for multiple spectra
+    model = DLAHolder(
+        num_spectra=num_spectra,
+        learned_file=args.learned_file,
+        catalog_name=args.catalog_name,
+        los_catalog=args.los_catalog,
+        dla_catalog=args.dla_catalog,
+        dla_samples_file=args.dla_samples_file,
+        sub_dla_samples_file=args.sub_dla_samples_file,
+        params=params,
+        min_z_separation=args.min_z_separation,
+        prev_tau_0=args.prev_tau_0,
+        prev_beta=args.prev_beta,
+        max_dlas=args.max_dlas,
+        plot_figures=bool(args.plot_figures),
+        max_workers=args.max_workers,
+        batch_size=args.batch_size,
+    )
 
     # set up for nested multiprocessing
     nproc_futures = int(os.cpu_count() / args.nproc)
@@ -207,7 +347,7 @@ def main(args=None):
                         args.program,
                         datapath,
                         catalog[catalog["HPXPIXEL"] == hpx],
-                        fluxmodel,
+                        model,
                         args.nproc,
                     )
                 )
@@ -220,7 +360,7 @@ def main(args=None):
                     "program": args.program,
                     "datapath": datapath,
                     "hpxcat": catalog[catalog["HPXPIXEL"] == hpx],
-                    "model": fluxmodel,
+                    "model": model,
                     "nproc": args.nproc,
                 }
                 for ih, hpx in enumerate(np.unique(catalog["HPXPIXEL"]))
@@ -254,6 +394,8 @@ def main(args=None):
     elif args.mocks:
 
         # TO DO : process in batches to add caching
+        # TODO: Mock section: probably count how many first
+        # TODO: break this into chunks to run
 
         datapath = f"{args.mockdir}/spectra-16"
 
@@ -436,44 +578,6 @@ def read_mock_catalog(qsocat, balmask, mockpath):
             exit(1)
 
     return catalog
-
-
-def read_varlss(varlss_path, fluxmodel):
-    """
-    add sigma_lss function to flux model dictionary
-
-    Arguments
-    ---------
-    varlss_path (str) : path to file containing LSS variance function
-    fluxmodel (dict) : dictionary for PCA flux model
-
-    Returns
-    -------
-    fluxmodel (dict) : flux model dictionary with var_lss entry appended
-
-    """
-
-    log.info(f"reading sigma_lss function from {varlss_path}")
-
-    # read in data
-    varlss_lya = Table(fitsio.read(varlss_path, ext="VAR_FUNC_LYA"))
-    varlss_lyb = Table(fitsio.read(varlss_path, ext="VAR_FUNC_LYB"))
-
-    # map lambda_obs -> var_lss
-    fluxmodel["VAR_FUNC_LYA"] = interp1d(
-        10 ** varlss_lya["LOGLAM"],
-        varlss_lya["VAR_LSS"],
-        bounds_error=False,
-        fill_value=0.0,
-    )
-    fluxmodel["VAR_FUNC_LYB"] = interp1d(
-        10 ** varlss_lyb["LOGLAM"],
-        varlss_lyb["VAR_LSS"],
-        bounds_error=False,
-        fill_value=0.0,
-    )
-
-    return fluxmodel
 
 
 # for parallelization over hpx
