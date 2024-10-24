@@ -246,6 +246,32 @@ def parse(options=None):
         help="Maximum pixel noise allowed during model training.",
     )
 
+    # process range
+    parser.add_argument(
+        "--hpx_start",
+        type=int,
+        default=0,
+        help="start healpix pixel",
+    )
+    parser.add_argument(
+        "--hpx_end",
+        type=int,
+        default=1,
+        help="end healpix pixel",
+    )
+    parser.add_argument(
+        "--level2_start",
+        type=int,
+        default=0,
+        help="start level2 folder",
+    )
+    parser.add_argument(
+        "--level2_end",
+        type=int,
+        default=1,
+        help="end level2 folder",
+    )
+
     if options is None:
         args = parser.parse_args()
     else:
@@ -269,6 +295,7 @@ def main(args=None):
         log.info(
             f"expecting healpix catalog for redux={args.release}, survey={args.survey}, program={args.program}; confirm this matches the catalog provided!"
         )
+        log.info(f"running in between healpix pixels {args.hpx_start} - {args.hpx_end}")
 
     # confirm bal masking choice
     if not (args.balmask):
@@ -290,11 +317,51 @@ def main(args=None):
     # For real data, count the number of healpix pixels
     # For mock data, count the number of level1 folders
     if args.mocks:
+        #  Mock section: count the total number of spectra.fits files
+        datapath = f"{args.mockdir}/spectra-16"
+        # list of .fits files, each ~ 800 spectra
+        speclist = []
+        all_level2 = []
+        for level1 in os.listdir(f"{datapath}"):
+            for level2 in os.listdir(f"{datapath}/{level1}"):
+                if os.path.exists(
+                    f"{datapath}/{level1}/{level2}/spectra-16-{level2}.fits"
+                ):
+                    speclist.append(
+                        f"{datapath}/{level1}/{level2}/spectra-16-{level2}.fits"
+                    )
+                    all_level2.append(level2)
+
+        # reorder speclist by level2
+        argsortind = np.argsort(list(map(int, all_level2)))
+        speclist = np.array(speclist)[
+            argsortind
+        ]  # these would be by order from 0 - 3071
+        all_level2 = np.array(list(map(int, all_level2)))[argsortind]
+
+        # running in between mock level2 folders: level2_start - level2_end
+        log.info(
+            "running in between mock level2 folders {} - {}; Total: {}".format(
+                args.level2_start, args.level2_end, all_level2[-1]
+            )
+        )
+        ind = (all_level2 >= args.level2_start) & (all_level2 < args.level2_end)
+
         catalog = read_mock_catalog(args.qsocat, args.balmask, args.mockdir)
-        num_spectra  # TODO: count from the number of level1 folders
+        # num_spectra  # TODO: count from the number of level2 folders
     else:
+        # running in between healpix pixels: hpx_start - hpx_end
         catalog = read_catalog(args.qsocat, args.balmask, args.tilebased)
-        num_spectra  # TODO: count from the number of healpix pixels
+
+        all_hpxs = catalog["HPXPIXEL"]
+        log.info(
+            "running in between healpix pixels {} - {}; Total {}".format(
+                args.hpx_start, args.hpx_end, all_hpxs[-1]
+            )
+        )
+        ind = (all_hpxs >= args.hpx_start) & (all_hpxs < args.hpx_end)
+
+        # num_spectra = np.sum(ind)  # count from the number of healpix pixels
 
     # TODO: Set up the GP-DLA model
     # Initialize Parameters object with user inputs
@@ -311,7 +378,6 @@ def main(args=None):
     )
     # This is the GP-DLA processor which can be reused for multiple spectra
     model = DLAHolder(
-        num_spectra=num_spectra,
         learned_file=args.learned_file,
         catalog_name=args.catalog_name,
         los_catalog=args.los_catalog,
@@ -337,9 +403,13 @@ def main(args=None):
 
         datapath = f"/global/cfs/cdirs/desi/spectro/redux/{args.release}/healpix/{args.survey}/{args.program}"
 
+        # Allyson recommend: 1 process per healpix
+        # So here if I want to run in chunks, still look through the healpix pixels
+        this_hpxs = all_hpxs[ind]
+
         if nproc_futures == 1:
             results = []
-            for hpx in np.unique(catalog["HPXPIXEL"]):
+            for hpx in np.unique(this_hpxs):
                 results.append(
                     dlasearch.dlasearch_hpx(
                         hpx,
@@ -363,7 +433,7 @@ def main(args=None):
                     "model": model,
                     "nproc": args.nproc,
                 }
-                for ih, hpx in enumerate(np.unique(catalog["HPXPIXEL"]))
+                for ih, hpx in enumerate(np.unique(this_hpxs))
             ]
 
             with ProcessPoolExecutor(nproc_futures) as pool:
@@ -376,12 +446,14 @@ def main(args=None):
         if "col0" in results.columns:
             results.remove_column("col0")
 
+        # filename for output include release, survey, program and healpix range
         outfile = os.path.join(
-            args.outdir, f"dlacat-{args.release}-{args.survey}-{args.program}.fits"
+            args.outdir,
+            f"dlacat-{args.release}-{args.survey}-{args.program}-hpx-{args.hpx_start}-{args.hpx_end}.fits",
         )
         if os.path.isfile(outfile):
             log.warning(
-                f"dlacat-{args.release}-{args.survey}-{args.program}.fits already exists in {args.outdir}, overwriting"
+                f"dlacat-{args.release}-{args.survey}-{args.program}-hpx-{args.hpx_start}-{args.hpx_end}.fits already exists in {args.outdir}, overwriting"
             )
         results.write(outfile, overwrite=True)
 
@@ -394,26 +466,11 @@ def main(args=None):
     elif args.mocks:
 
         # TO DO : process in batches to add caching
-        # TODO: Mock section: probably count how many first
-        # TODO: break this into chunks to run
-
-        datapath = f"{args.mockdir}/spectra-16"
-
-        speclist = []
-        for level1 in os.listdir(f"{datapath}"):
-            for level2 in os.listdir(f"{datapath}/{level1}"):
-                if os.path.exists(
-                    f"{datapath}/{level1}/{level2}/spectra-16-{level2}.fits"
-                ):
-                    speclist.append(
-                        f"{datapath}/{level1}/{level2}/spectra-16-{level2}.fits"
-                    )
-
         if nproc_futures == 1:
             results = []
             for specfile in speclist:
                 results.append(
-                    dlasearch.dlasearch_mock(specfile, catalog, fluxmodel, args.nproc)
+                    dlasearch.dlasearch_mock(specfile, catalog, model, args.nproc)
                 )
 
         if nproc_futures > 1:
@@ -421,7 +478,7 @@ def main(args=None):
                 {
                     "specfile": specfile,
                     "catalog": catalog,
-                    "model": fluxmodel,
+                    "model": model,
                     "nproc": args.nproc,
                 }
                 for ih, specfile in enumerate(speclist)
@@ -437,10 +494,14 @@ def main(args=None):
         if "col0" in results.columns:
             results.remove_column("col0")
 
-        outfile = os.path.join(args.outdir, f"dlacat-{args.release}-mockcat.fits")
+        # filename for output include release, survey, program and folder range
+        outfile = os.path.join(
+            args.outdir,
+            f"dlacat-{args.release}-mockcat-{args.level2_start}-{args.level2_end}.fits",
+        )
         if os.path.isfile(outfile):
             log.warning(
-                f"dlacat-{args.release}-mockcat.fits already exists in {args.outdir}, overwriting"
+                f"dlacat-{args.release}-mockcat-{args.level2_start}-{args.level2_end}.fits already exists in {args.outdir}, overwriting"
             )
         results.write(outfile, overwrite=True)
 

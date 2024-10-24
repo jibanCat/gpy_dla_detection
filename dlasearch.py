@@ -22,11 +22,14 @@ from desispec.coaddition import coadd_cameras, resample_spectra_lin_or_log
 from desiutil.log import log
 
 import constants
-import dlaprofile
+
+# import dlaprofile
 from fitwarning import DLAFLAG
 
 import warnings
 from scipy.optimize import OptimizeWarning
+
+from run_bayes_select import DLAHolder
 
 warnings.simplefilter("error", OptimizeWarning)
 
@@ -170,7 +173,7 @@ def dlasearch_mock(specfile, catalog, model, nproc):
             pool.close()
 
     else:
-        log.error(f"could not locate coadd file for healpix {healpix}")
+        log.error(f"could not locate coadd file for healpix {specfile}")
         return ()
 
     t1 = time.time()
@@ -182,7 +185,7 @@ def dlasearch_mock(specfile, catalog, model, nproc):
     return fitresults
 
 
-def process_spectra_group(coaddpath, catalog, model, pool=None):
+def process_spectra_group(coaddpath, catalog, model: DLAHolder, pool=None):
     """
     pre-process group of spectra in same file and run DLA searching tools
 
@@ -250,20 +253,25 @@ def process_spectra_group(coaddpath, catalog, model, pool=None):
     # for each entry in passed catalog, fit spectrum with intrinsic model + N DLA
     wave = specobj.wave["brz"]
 
-    # var_lss term for Lya and Lyb+ regions
-    varlss_lya = model["VAR_FUNC_LYA"](wave)
-    varlss_lyb = model["VAR_FUNC_LYB"](wave)
-
+    # lists shared with Allyson's finder
     tidlist, ralist, declist, zqsolist, snrlist, dlaidlist = [], [], [], [], [], []
-    zlist, nhilist, dchi2list, zerrlist, nhierrlist, fitwarnlist, coefflist = (
-        [],
-        [],
+    zlist, nhilist, zerrlist, nhierrlist, fitwarnlist = (
         [],
         [],
         [],
         [],
         [],
     )
+    # lists for GP-DLA results
+    pdlalist = []
+    pnulllist = []
+    logpdlalist = []
+    logpnulllist = []
+    modelplist = []
+
+    # set up results dict for GPDLA
+    num_spectra = len(catalog)
+    model.initialize_results(num_spectra=num_spectra)
 
     # for each entry in passed catalog, fit spectrum with intrinsic model + N DLA
     for entry in range(len(catalog)):
@@ -281,7 +289,7 @@ def process_spectra_group(coaddpath, catalog, model, pool=None):
         try:
             idx = np.nonzero(specobj.fibermap["TARGETID"] == tid)[0][0]
         except:
-            log.error(f"Targetid {tid} NOT FOUND on healpix {healpix}")
+            log.error(f"Targetid {tid} NOT FOUND on healpix {catalog["HPXPIXEL"][entry]}")
             continue
 
         # TODO: Do the GP finder here
@@ -289,14 +297,7 @@ def process_spectra_group(coaddpath, catalog, model, pool=None):
         flux = specobj.flux["brz"][idx]
         ivar = specobj.ivar["brz"][idx]
         wave_rf = wave / (1 + zqso)
-
-        # only searching to rest frame 900 A
-        fitmask = wave_rf > constants.search_minlam
-
-        # limit our bestfit comparision w/ and w/o DLAs to search region of spectrum
-        searchmask = np.ma.masked_inside(
-            wave_rf[fitmask], constants.search_minlam, constants.search_maxlam
-        ).mask
+        pixel_mask = specobj.mask["brz"][idx].astype(np.bool_)
 
         # apply mask to BAL features, if available
         if "NCIV_450" in catalog.columns:
@@ -315,58 +316,87 @@ def process_spectra_group(coaddpath, catalog, model, pool=None):
                         blueedge = (lam * v_max) * (1 + zqso)
                         bal_locs.append((rededge, blueedge))
 
-                    # Update ivar = 0
+                    # Update pixel mask
+                    pixel_mask[mask] = True
+
                     ivar[mask] = 0
 
+        # Convert inverse variance to variance
+        noise_variance = np.zeros(ivar.shape)
+        ind = ivar == 0
+        noise_variance[:] = np.nan
+        noise_variance[~ind] = 1 / ivar[~ind]
+
+        # This part set by Allyson, leave it as it is to match the final catalog filtering
+        # only searching to rest frame 900 A (TODO: make this match GPDLA search range)
+        fitmask = wave_rf > constants.search_minlam
+        # limit our bestfit comparision w/ and w/o DLAs to search region of spectrum
+        searchmask = np.ma.masked_inside(wave_rf[fitmask], constants.search_minlam, constants.search_maxlam).mask
         # check if too much of the spectrum is masked
         if np.sum(ivar[fitmask][searchmask] != 0) / np.sum(searchmask) < 0.2:
             log.warning(f"Targetid {tid} skipped - SEARCH WINDOW >80% MASKED")
             continue
 
         # resample model to observed wave grid
-        fitmodel = np.zeros([model["PCA_COMP"].shape[0], np.sum(fitmask)])
-        for i in range(model["PCA_COMP"].shape[0]):
-            fitmodel[i] = resample_flux(
-                wave[fitmask], model["PCA_WAVE"] * (1 + zqso), model["PCA_COMP"][i]
-            )
+        model.process_qso(
+            entry, tid, wavelengths=wave, flux=flux, noise_variance=noise_variance,
+            pixel_mask=pixel_mask, z_qso=zqso,
+        )
 
-        # apply mean transmission correction for lyman alpha forest
-        for transition, values in constants.Lyman_series[model["IGM"]].items():
-            lam_range = wave_rf[fitmask] < values["line"]
-            zpix = wave[fitmask][lam_range] / values["line"] - 1
-            T = np.exp(-values["A"] * (1 + zpix) ** values["B"])
-            fitmodel[:, lam_range] *= T
+        # fitmodel = np.zeros([model["PCA_COMP"].shape[0], np.sum(fitmask)])
+        # for i in range(model["PCA_COMP"].shape[0]):
+        #     fitmodel[i] = resample_flux(
+        #         wave[fitmask], model["PCA_WAVE"] * (1 + zqso), model["PCA_COMP"][i]
+        #     )
 
-        # determine var_lss array
-        lyaregion = (wave_rf < constants.Lya_line) & (wave_rf > constants.Lyb_line)
-        lybregion = (
-            wave_rf < constants.Lyb_line
-        )  # assuming N>3 transition minimal impact
-        varlss = np.zeros(len(ivar))
-        varlss[lyaregion] = varlss_lya[lyaregion]
-        varlss[lybregion] = varlss_lyb[lybregion]
+        # TODO: update GPDLA's meanflux model to DESI's, which needs to re-train on Y1
+        # # apply mean transmission correction for lyman alpha forest
+        # for transition, values in constants.Lyman_series[model["IGM"]].items():
+        #     lam_range = wave_rf[fitmask] < values["line"]
+        #     zpix = wave[fitmask][lam_range] / values["line"] - 1
+        #     T = np.exp(-values["A"] * (1 + zpix) ** values["B"])
+        #     fitmodel[:, lam_range] *= T
 
+        # # determine var_lss array
+        # lyaregion = (wave_rf < constants.Lya_line) & (wave_rf > constants.Lyb_line)
+        # lybregion = (
+        #     wave_rf < constants.Lyb_line
+        # )  # assuming N>3 transition minimal impact
+        # varlss = np.zeros(len(ivar))
+        # varlss[lyaregion] = varlss_lya[lyaregion]
+        # varlss[lybregion] = varlss_lyb[lybregion]
+
+        # TODO: get zerr and nhierr from GPDLA
         # model w/o DLAs
-        coeff_null, chi2dof_null = fit_spectrum(
-            wave[fitmask],
-            flux[fitmask],
-            ivar[fitmask],
-            fitmodel,
-            varlss[fitmask],
-            searchmask,
-        )
 
-        # add up to 3 DLAs to fit, no detections have [z,nhi,dchi] = [-1,0,0]
-        zdla, zerr, nhi, nhierr, dchi2, fitwarn, coeff_dla = fit_spectrum_DLA(
-            wave[fitmask],
-            flux[fitmask],
-            ivar[fitmask],
-            fitmodel,
-            varlss[fitmask],
-            searchmask,
-            chi2dof_null,
-            pool,
-        )
+        log_posteriors_no_dla = model.results["log_posteriors_no_dla"][entry]
+        p_no_dla = model.results["p_no_dlas"][entry]
+        # coeff_null, chi2dof_null = fit_spectrum(
+        #     wave[fitmask],
+        #     flux[fitmask],
+        #     ivar[fitmask],
+        #     fitmodel,
+        #     varlss[fitmask],
+        #     searchmask,
+        # )
+
+        zdla = model.results["MAP_z_dlas"][entry]
+        zerr = model.results["z_dla_errs"][entry]
+        nhi = model.results["MAP_log_nhis"][entry]
+        nhierr = model.results["log_nhi_errs"][entry]
+        log_posteriors_dla = model.results["log_posteriors_dla"][entry]
+        p_dla = model.results["p_dlas"][entry]
+        model_posteriors = model.results["model_posteriors"][entry]
+
+        # replace nan with -1 for Allysion's convention
+        zdla[np.isnan(zdla)] = -1
+        zerr[np.isnan(zerr)] = -1
+        nhi[np.isnan(nhi)] = -1
+        nhierr[np.isnan(nhierr)] = -1
+
+        # Allyson's code to get fitwarning
+        # TODO: replace this specific to GP
+        fitwarn = np.full(3,0)
 
         # check for potential BAL contamination in solution
         # false positive should only come from Lya and NV - all other lines too weak
@@ -384,19 +414,27 @@ def process_spectra_group(coaddpath, catalog, model, pool=None):
             ralist.append(ra)
             declist.append(dec)
             zqsolist.append(zqso)
+
+            # DLA parameters
             zlist.append(zdla[n])
             zerrlist.append(zerr[n])
             nhilist.append(nhi[n])
             nhierrlist.append(nhierr[n])
-            dchi2list.append(dchi2[n])
             fitwarnlist.append(fitwarn[n])
-            coefflist.append(coeff_dla[n])
             # average signal to noise in search region of unmasked pixels
             mask = ivar[fitmask][searchmask] != 0
             snr = np.mean(
                 (flux[fitmask][searchmask] * np.sqrt(ivar[fitmask][searchmask]))[mask]
             )
             snrlist.append(snr)
+
+            # GP-DLA results
+            pdlalist.append(p_dla)
+            pnulllist.append(p_no_dla)
+            logpdlalist.append(log_posteriors_dla[n])
+            logpnulllist.append(log_posteriors_no_dla)
+            modelplist.append(model_posteriors[2+n])
+
 
     if len(tidlist) == 0:
         # avoid vstack error for empty tables
@@ -414,9 +452,13 @@ def process_spectra_group(coaddpath, catalog, model, pool=None):
             zerrlist,
             nhilist,
             nhierrlist,
-            coefflist,
-            dchi2list,
             fitwarnlist,
+            # GP-DLA results
+            pdlalist, # posterior probability of DLA model
+            pnulllist, # posterior probability of no DLA model
+            logpdlalist, # log posterior probability of DLA model
+            logpnulllist, # log posterior probability of no DLA model
+            modelplist, # model posterior probabilities
         ),
         names=[
             "TARGETID",
@@ -429,9 +471,12 @@ def process_spectra_group(coaddpath, catalog, model, pool=None):
             "Z_DLA_ERR",
             "NHI",
             "NHI_ERR",
-            "COEFF",
-            "DELTACHI2",
             "DLAFLAG",
+            "P_DLA",
+            "P_NULL",
+            "LOGP_DLA",
+            "LOGP_NULL",
+            "MODEL_P",            
         ],
         dtype=(
             "int",
@@ -444,9 +489,12 @@ def process_spectra_group(coaddpath, catalog, model, pool=None):
             "float64",
             "float64",
             "float64",
-            "float64",
-            "float64",
             "int",
+            "float64",
+            "float64",
+            "float64",
+            "float64",
+            "float64",            
         ),
     )
 
