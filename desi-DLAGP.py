@@ -119,18 +119,6 @@ def parse(options=None):
     )
 
     ###======== GP-DLA specific arguments =========###
-
-    # Spectra and file-related arguments
-    parser.add_argument(
-        "--spectra_filename",
-        required=True,
-        help="DESI spectra FITS filename (e.g., spectra-*.fits).",
-    )
-    parser.add_argument(
-        "--zbest_filename",
-        required=True,
-        help="DESI redshift catalog filename (zbest-*.fits).",
-    )
     parser.add_argument(
         "--learned_file",
         default="data/dr12q/processed/learned_qso_model_lyseries_variance_wmu_boss_dr16q_minus_dr12q_gp_851-1421.mat",
@@ -285,6 +273,11 @@ def parse(options=None):
 def main(args=None):
     if isinstance(args, (list, tuple, type(None))):
         args = parse(args)
+
+    # print out the flags line by line for logging
+    log.info("running with the following flags:")
+    for arg in vars(args):
+        log.info(f"{arg}: {getattr(args, arg)}")
 
     # Check if catalog exists
     if not os.path.isfile(args.qsocat):

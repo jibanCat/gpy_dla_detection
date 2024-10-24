@@ -101,6 +101,7 @@ def dlasearch_hpx(healpix, survey, program, datapath, hpxcat, model_params, exec
 
     return fitresults
 
+
 def dlasearch_tile(tileid, datapath, tilecat, model, nproc):
     """
     Find the best fitting DLA profile(s) for spectra in hpx catalog
@@ -138,6 +139,7 @@ def dlasearch_tile(tileid, datapath, tilecat, model, nproc):
     log.info(
         f"Completed processing of {len(tilecat)} spectra from tile {tileid} in {total}s"
     )
+
 
 def dlasearch_mock(specfile, catalog, model_params, executor):
     """
@@ -197,6 +199,7 @@ def dlasearch_mock(specfile, catalog, model_params, executor):
     )
 
     return fitresults
+
 
 def process_spectra_group(coaddpath, catalog, model: DLAHolder, executor=None):
     """
@@ -302,7 +305,9 @@ def process_spectra_group(coaddpath, catalog, model: DLAHolder, executor=None):
         try:
             idx = np.nonzero(specobj.fibermap["TARGETID"] == tid)[0][0]
         except:
-            log.error(f"Targetid {tid} NOT FOUND on healpix {catalog["HPXPIXEL"][entry]}")
+            log.error(
+                f"Targetid {tid} NOT FOUND on healpix {catalog['HPXPIXEL'][entry]}"
+            )
             continue
 
         # TODO: Do the GP finder here
@@ -344,7 +349,9 @@ def process_spectra_group(coaddpath, catalog, model: DLAHolder, executor=None):
         # only searching to rest frame 900 A (TODO: make this match GPDLA search range)
         fitmask = wave_rf > constants.search_minlam
         # limit our bestfit comparision w/ and w/o DLAs to search region of spectrum
-        searchmask = np.ma.masked_inside(wave_rf[fitmask], constants.search_minlam, constants.search_maxlam).mask
+        searchmask = np.ma.masked_inside(
+            wave_rf[fitmask], constants.search_minlam, constants.search_maxlam
+        ).mask
         # check if too much of the spectrum is masked
         if np.sum(ivar[fitmask][searchmask] != 0) / np.sum(searchmask) < 0.2:
             log.warning(f"Targetid {tid} skipped - SEARCH WINDOW >80% MASKED")
@@ -352,8 +359,14 @@ def process_spectra_group(coaddpath, catalog, model: DLAHolder, executor=None):
 
         # resample model to observed wave grid
         model.process_qso(
-            entry, tid, wavelengths=wave, flux=flux, noise_variance=noise_variance,
-            pixel_mask=pixel_mask, z_qso=zqso, executor=executor,
+            entry,
+            tid,
+            wavelengths=wave,
+            flux=flux,
+            noise_variance=noise_variance,
+            pixel_mask=pixel_mask,
+            z_qso=zqso,
+            executor=executor,
         )
 
         # Get zerr and nhierr from GPDLA
@@ -378,7 +391,7 @@ def process_spectra_group(coaddpath, catalog, model: DLAHolder, executor=None):
 
         # Allyson's code to get fitwarning
         # TODO: replace this specific to GP
-        fitwarn = np.full(3,0)
+        fitwarn = np.full(3, 0)
 
         # check for potential BAL contamination in solution
         # false positive should only come from Lya and NV - all other lines too weak
@@ -415,8 +428,7 @@ def process_spectra_group(coaddpath, catalog, model: DLAHolder, executor=None):
             pnulllist.append(p_no_dla)
             logpdlalist.append(log_posteriors_dla[n])
             logpnulllist.append(log_posteriors_no_dla)
-            modelplist.append(model_posteriors[2+n])
-
+            modelplist.append(model_posteriors[2 + n])
 
     if len(tidlist) == 0:
         # avoid vstack error for empty tables
@@ -440,11 +452,11 @@ def process_spectra_group(coaddpath, catalog, model: DLAHolder, executor=None):
             nhierrlist,
             fitwarnlist,
             # GP-DLA results
-            pdlalist, # posterior probability of DLA model
-            pnulllist, # posterior probability of no DLA model
-            logpdlalist, # log posterior probability of DLA model
-            logpnulllist, # log posterior probability of no DLA model
-            modelplist, # model posterior probabilities
+            pdlalist,  # posterior probability of DLA model
+            pnulllist,  # posterior probability of no DLA model
+            logpdlalist,  # log posterior probability of DLA model
+            logpnulllist,  # log posterior probability of no DLA model
+            modelplist,  # model posterior probabilities
         ),
         names=[
             "TARGETID",
@@ -462,7 +474,7 @@ def process_spectra_group(coaddpath, catalog, model: DLAHolder, executor=None):
             "P_NULL",
             "LOGP_DLA",
             "LOGP_NULL",
-            "MODEL_P",            
+            "MODEL_P",
         ],
         dtype=(
             "int",
@@ -480,7 +492,7 @@ def process_spectra_group(coaddpath, catalog, model: DLAHolder, executor=None):
             "float64",
             "float64",
             "float64",
-            "float64",            
+            "float64",
         ),
     )
 

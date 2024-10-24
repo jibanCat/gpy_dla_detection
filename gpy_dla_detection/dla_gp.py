@@ -9,6 +9,7 @@ import os
 
 import concurrent.futures
 from concurrent.futures import as_completed
+from desiutil.log import log
 
 
 import numpy as np
@@ -398,10 +399,11 @@ class DLAGP(NullGP):
             indices[i : i + batch_size] for i in range(0, len(indices), batch_size)
         ]
 
-        # Use an external executor if provided, otherwise create a new one
-        executor_is_external = executor is not None
-        if not executor_is_external:
+        # Check if an executor is passed; if not, create one locally
+        local_executor = False
+        if executor is None:
             executor = concurrent.futures.ProcessPoolExecutor(max_workers=max_workers)
+            local_executor = True
 
         try:
             for num_dlas in range(max_dlas):  # Iterate from 0 to max_dlas - 1
@@ -423,12 +425,14 @@ class DLAGP(NullGP):
 
                 # Process the results as each batch completes
                 for future in as_completed(futures):
-                    batch_indices = futures[future]  # Retrieve the batch indices
-                    batch_results = future.result()  # Get the results for this batch
-
-                    # Store the results in the corresponding places in sample_log_likelihoods
-                    for i, result in zip(batch_indices, batch_results):
-                        sample_log_likelihoods[i, num_dlas] = result
+                    batch_indices = futures[future]
+                    try:
+                        batch_results = future.result()
+                        # Store the results
+                        for i, result in zip(batch_indices, batch_results):
+                            sample_log_likelihoods[i, num_dlas] = result
+                    except Exception as e:
+                        log.error(f"Error in batch processing: {e}")
 
                 # Handle NaN values and resampling logic
                 if num_dlas > 0:
@@ -472,8 +476,8 @@ class DLAGP(NullGP):
                 )
 
         finally:
-            # Shut down the executor if it was created locally
-            if not executor_is_external:
+            # Only shut down the executor if it was created locally
+            if local_executor:
                 executor.shutdown()
 
         # Store results for future use
