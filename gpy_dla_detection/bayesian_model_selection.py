@@ -6,6 +6,7 @@ from scipy.special import logsumexp
 from .null_gp import NullGP
 from .dla_gp import DLAGP
 from .subdla_gp import SubDLAGP
+import concurrent.futures
 
 
 class BayesModelSelect:
@@ -35,7 +36,7 @@ class BayesModelSelect:
         z_qso: float,
         max_workers: int = None,
         batch_size: int = 100,
-        pool=None,
+        executor=None,
     ) -> np.ndarray:
         """
         Perform Bayesian model selection for a list of models.
@@ -44,7 +45,7 @@ class BayesModelSelect:
         :param z_qso: The redshift of the quasar.
         :param max_workers: Number of workers to use for parallel processing.
         :param batch_size: Batch size for parallel computation.
-        :param pool: Pool object for parallel processing.
+        :param executor: Executor object for parallel processing.
 
         :return: Array of log posteriors for each model.
         """
@@ -58,33 +59,27 @@ class BayesModelSelect:
 
         # Prepare the model priors for each model
         for i, num_dlas in enumerate(self.all_max_dlas):
-            # Skip the null model prior (no DLAs)
             if num_dlas == 0:
                 log_priors.append([np.nan])  # Null model prior
                 continue
 
-            # Compute the model priors for DLA and subDLA models
             log_priors_dla = model_list[i].log_priors(z_qso, num_dlas)
             log_priors.append(log_priors_dla)
 
-        # Calculate the null model prior as (1 - sum of all other model priors)
         log_priors = np.array(list(chain(*log_priors)))
         log_priors[0] = np.log(1 - np.exp(logsumexp(log_priors[1:])))
 
         # Calculate model evidences (log likelihoods)
-        # TODO: Here is the place if you want to stop the for loop when you are sure that no dla is present
         for i, num_dlas in enumerate(self.all_max_dlas):
             if num_dlas == 0:
-                # Null model evidence
                 log_likelihood_no_dla = model_list[i].log_model_evidence()
                 log_likelihoods.append([log_likelihood_no_dla])
             else:
-                # Use parallel model evidence calculation for DLA models
                 log_likelihoods_dla = model_list[i].parallel_log_model_evidences(
                     num_dlas,
                     max_workers=max_workers,
                     batch_size=batch_size,
-                    executor=pool,
+                    executor=executor,
                 )
                 log_likelihoods.append(log_likelihoods_dla)
 
@@ -99,7 +94,7 @@ class BayesModelSelect:
             or not np.isfinite(log_posteriors[2])
         ):
             warnings.warn(
-                f"Invalid values encountered in log likelihoods, priors, or posteriors."
+                "Invalid values encountered in log likelihoods, priors, or posteriors."
             )
         else:
             difference = np.abs(
