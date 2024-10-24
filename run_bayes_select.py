@@ -45,6 +45,7 @@ def process_single_spectrum(
     plot_figures: bool,
     max_workers: int,
     batch_size: int,
+    executor=None,
 ):
     """
     Process a single spectrum using pre-initialized Null, DLA, and SubDLA models.
@@ -97,6 +98,8 @@ def process_single_spectrum(
         Number of workers for parallel processing.
     batch_size : int
         Batch size for parallel model evidence computation.
+    executor    : concurrent.futures.Executor
+        Executor object for parallel processing.
     """
     # Set data for the Null, DLA, and Sub-DLA models
     for model, name in zip([gp, dla_gp, subdla_gp], ["Null", "DLA", "Sub-DLA"]):
@@ -106,7 +109,11 @@ def process_single_spectrum(
 
     # Run Bayesian model selection with parallelized model evidence computation
     bayes.model_selection(
-        [gp, subdla_gp, dla_gp], z_qso, max_workers=max_workers, batch_size=batch_size
+        [gp, subdla_gp, dla_gp],
+        z_qso,
+        max_workers=max_workers,
+        batch_size=batch_size,
+        executor=executor,
     )
 
     # Store basic results
@@ -274,7 +281,15 @@ class DLAHolder:
         self.num_spectra = num_spectra
 
     def process_qso(
-        self, idx, target_id, wavelengths, flux, noise_variance, pixel_mask, z_qso
+        self,
+        idx,
+        target_id,
+        wavelengths,
+        flux,
+        noise_variance,
+        pixel_mask,
+        z_qso,
+        executor,
     ):
         """
         Process all spectra in the DESI file.
@@ -340,6 +355,7 @@ class DLAHolder:
             self.plot_figures,
             self.max_workers,
             self.batch_size,
+            executor,
         )
         del null_gp, dla_gp, subdla_gp
 

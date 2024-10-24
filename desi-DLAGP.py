@@ -281,11 +281,10 @@ def parse(options=None):
 
 
 def main(args=None):
-
     if isinstance(args, (list, tuple, type(None))):
         args = parse(args)
 
-    # Check is catalog exists
+    # Check if catalog exists
     if not os.path.isfile(args.qsocat):
         log.error(f"{args.qsocat} does not exist")
         exit(1)
@@ -297,7 +296,7 @@ def main(args=None):
         )
         log.info(f"running in between healpix pixels {args.hpx_start} - {args.hpx_end}")
 
-    # confirm bal masking choice
+    # confirm BAL masking choice
     if not (args.balmask):
         log.warning(
             f"BALs will not be masked! The only good reason to do this is if you do not have a BAL catalog, set --balmask to turn on masking."
@@ -396,21 +395,16 @@ def main(args=None):
 
     # set up for nested multiprocessing
     nproc_futures = int(os.cpu_count() / args.nproc)
+    # Create a high-level executor
+    with ProcessPoolExecutor(max_workers=nproc_futures) as high_level_executor:
 
-    if not (args.tilebased) and not (args.mocks):
+        if not (args.tilebased) and not (args.mocks):
+            datapath = f"/global/cfs/cdirs/desi/spectro/redux/{args.release}/healpix/{args.survey}/{args.program}"
+            this_hpxs = all_hpxs[ind]
 
-        # TO DO : process in batches to add caching
-
-        datapath = f"/global/cfs/cdirs/desi/spectro/redux/{args.release}/healpix/{args.survey}/{args.program}"
-
-        # Allyson recommend: 1 process per healpix
-        # So here if I want to run in chunks, still look through the healpix pixels
-        this_hpxs = all_hpxs[ind]
-
-        if nproc_futures == 1:
-            results = []
-            for hpx in np.unique(this_hpxs):
-                results.append(
+            # Distribute tasks using the high-level executor
+            if nproc_futures == 1:
+                results = [
                     dlasearch.dlasearch_hpx(
                         hpx,
                         args.survey,
@@ -418,26 +412,52 @@ def main(args=None):
                         datapath,
                         catalog[catalog["HPXPIXEL"] == hpx],
                         model,
-                        args.nproc,
+                        high_level_executor,  # Pass the executor here
                     )
-                )
+                    for hpx in np.unique(this_hpxs)
+                ]
 
-        if nproc_futures > 1:
-            arguments = [
-                {
-                    "healpix": hpx,
-                    "survey": args.survey,
-                    "program": args.program,
-                    "datapath": datapath,
-                    "hpxcat": catalog[catalog["HPXPIXEL"] == hpx],
-                    "model": model,
-                    "nproc": args.nproc,
-                }
-                for ih, hpx in enumerate(np.unique(this_hpxs))
-            ]
+            else:
+                arguments = [
+                    {
+                        "healpix": hpx,
+                        "survey": args.survey,
+                        "program": args.program,
+                        "datapath": datapath,
+                        "hpxcat": catalog[catalog["HPXPIXEL"] == hpx],
+                        "model": model,
+                        "executor": high_level_executor,  # Pass the executor here
+                    }
+                    for hpx in np.unique(this_hpxs)
+                ]
 
-            with ProcessPoolExecutor(nproc_futures) as pool:
-                results = list(pool.map(_dlasearchhpx, arguments))
+                results = list(high_level_executor.map(_dlasearchhpx, arguments))
+
+        # place holder until tile-based developed
+        elif args.tilebased:
+            # TO DO : process in batches to add caching
+            log.error("tile based capability does not exist")
+            exit(1)
+
+        elif args.mocks:
+            if nproc_futures == 1:
+                results = [
+                    dlasearch.dlasearch_mock(
+                        specfile, catalog, model, high_level_executor
+                    )
+                    for specfile in speclist
+                ]
+            else:
+                arguments = [
+                    {
+                        "specfile": specfile,
+                        "catalog": catalog,
+                        "model": model,
+                        "executor": high_level_executor,
+                    }
+                    for specfile in speclist
+                ]
+                results = list(high_level_executor.map(_dlasearchmock, arguments))
 
         results = vstack(results)
         results.meta["EXTNAME"] = "DLACAT"
@@ -447,63 +467,28 @@ def main(args=None):
             results.remove_column("col0")
 
         # filename for output include release, survey, program and healpix range
-        outfile = os.path.join(
-            args.outdir,
-            f"dlacat-{args.release}-{args.survey}-{args.program}-hpx-{args.hpx_start}-{args.hpx_end}.fits",
-        )
-        if os.path.isfile(outfile):
-            log.warning(
-                f"dlacat-{args.release}-{args.survey}-{args.program}-hpx-{args.hpx_start}-{args.hpx_end}.fits already exists in {args.outdir}, overwriting"
+        if not (args.tilebased) and not (args.mocks):
+            outfile = os.path.join(
+                args.outdir,
+                f"dlacat-{args.release}-{args.survey}-{args.program}-hpx-{args.hpx_start}-{args.hpx_end}.fits",
             )
-        results.write(outfile, overwrite=True)
-
-    # place holder until tile-based developed
-    elif args.tilebased:
-        # TO DO : process in batches to add caching
-        log.error("tile based capability does not exist")
-        exit(1)
-
-    elif args.mocks:
-
-        # TO DO : process in batches to add caching
-        if nproc_futures == 1:
-            results = []
-            for specfile in speclist:
-                results.append(
-                    dlasearch.dlasearch_mock(specfile, catalog, model, args.nproc)
+            if os.path.isfile(outfile):
+                log.warning(
+                    f"dlacat-{args.release}-{args.survey}-{args.program}-hpx-{args.hpx_start}-{args.hpx_end}.fits already exists in {args.outdir}, overwriting"
                 )
+            results.write(outfile, overwrite=True)
 
-        if nproc_futures > 1:
-            arguments = [
-                {
-                    "specfile": specfile,
-                    "catalog": catalog,
-                    "model": model,
-                    "nproc": args.nproc,
-                }
-                for ih, specfile in enumerate(speclist)
-            ]
-
-            with ProcessPoolExecutor(nproc_futures) as pool:
-                results = list(pool.map(_dlasearchmock, arguments))
-
-        results = vstack(results)
-        results.meta["EXTNAME"] = "DLACAT"
-
-        # remove extra column from spec groups with no detections
-        if "col0" in results.columns:
-            results.remove_column("col0")
-
-        # filename for output include release, survey, program and folder range
-        outfile = os.path.join(
-            args.outdir,
-            f"dlacat-{args.release}-mockcat-{args.level2_start}-{args.level2_end}.fits",
-        )
-        if os.path.isfile(outfile):
-            log.warning(
-                f"dlacat-{args.release}-mockcat-{args.level2_start}-{args.level2_end}.fits already exists in {args.outdir}, overwriting"
+        elif args.mocks:
+            # filename for output include release, survey, program and folder range
+            outfile = os.path.join(
+                args.outdir,
+                f"dlacat-{args.release}-mockcat-{args.level2_start}-{args.level2_end}.fits",
             )
-        results.write(outfile, overwrite=True)
+            if os.path.isfile(outfile):
+                log.warning(
+                    f"dlacat-{args.release}-mockcat-{args.level2_start}-{args.level2_end}.fits already exists in {args.outdir}, overwriting"
+                )
+            results.write(outfile, overwrite=True)
 
     tfin = time.time()
     total_time = tfin - tini

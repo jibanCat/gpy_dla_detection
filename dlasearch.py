@@ -38,46 +38,17 @@ warnings.simplefilter("error", OptimizeWarning)
 ##########################
 
 
-def dlasearch_hpx(healpix, survey, program, datapath, hpxcat, model, nproc):
+def dlasearch_hpx(healpix, survey, program, datapath, hpxcat, model, executor):
     """
     Find the best fitting DLA profile(s) for spectra in hpx catalog
-
-    Arguments
-    ---------
-    healpix (int) : N64 healpix
-    survey (str) : e.g., main, sv1, sv2, etc.
-    program (str) : e.g., bright, dark, etc.
-    datapath (str) : path to coadd files
-    hpxcat (table) : collection of spectra to search for DLAs, all belonging to
-                     single healpix
-    model (dict) : flux model dictionary containing 'PCA_WAVE', 'PCA_COMP', 'IGM',
-                    'VAR_FUNC_LYA', and 'VAR_FUNC_LYB' keys
-    nproc (int) : number of multiprocessing processes for solve_DLA, default=64
-
-    Returns
-    -------
-    fitresults (table) : attributes of detected DLAs
     """
-
     t0 = time.time()
 
-    # read spectra from healpix
     coaddname = f"coadd-{survey}-{program}-{str(healpix)}.fits"
     coadd = os.path.join(datapath, str(healpix // 100), str(healpix), coaddname)
 
     if os.path.exists(coadd):
-
-        # set up pool
-        if nproc > 1:
-            pool = mp.Pool(nproc)
-        else:
-            pool = None
-
-        fitresults = process_spectra_group(coadd, hpxcat, model, pool)
-
-        if nproc > 1:
-            pool.close()
-
+        fitresults = process_spectra_group(coadd, hpxcat, model, executor)
     else:
         log.error(f"could not locate coadd file for healpix {healpix}")
         return ()
@@ -89,7 +60,6 @@ def dlasearch_hpx(healpix, survey, program, datapath, hpxcat, model, nproc):
     )
 
     return fitresults
-
 
 def dlasearch_tile(tileid, datapath, tilecat, model, nproc):
     """
@@ -130,50 +100,22 @@ def dlasearch_tile(tileid, datapath, tilecat, model, nproc):
     )
 
 
-def dlasearch_mock(specfile, catalog, model, nproc):
+def dlasearch_mock(specfile, catalog, model, executor):
     """
-    function description
-
-    Arguments
-    ---------
-    specfile (str) : path to mock spectra-16-X.fits file
-    catalog (table) : catalog of spectra to search for DLAs
-    model (dict) : flux model dictionary containing 'PCA_WAVE', 'PCA_COMP', 'IGM',
-                    'VAR_FUNC_LYA', and 'VAR_FUNC_LYB' keys
-    nproc (int) : number of multiprocessing processes for solve_DLA, default=64
-
-    Returns
-    -------
-    fitresults (table) : fit attributes for detected DLAs
+    Find the best fitting DLA profile(s) for spectra in the mock catalog.
     """
-
     t0 = time.time()
 
     if os.path.exists(specfile):
-
-        # open spectra file fibermap only
         fm = desispec.io.read_fibermap(specfile)
-
-        # pare catalog to match spectra file fibermap
         tidmask = np.in1d(catalog["TARGETID"], fm["TARGETID"])
         catalog = catalog[tidmask]
         if len(catalog) < 1:
-            # no objects
             return ()
 
-        # set up pool
-        if nproc > 1:
-            pool = mp.Pool(nproc)
-        else:
-            pool = None
-
-        fitresults = process_spectra_group(specfile, catalog, model, pool)
-
-        if nproc > 1:
-            pool.close()
-
+        fitresults = process_spectra_group(specfile, catalog, model, executor)
     else:
-        log.error(f"could not locate coadd file for healpix {specfile}")
+        log.error(f"could not locate coadd file for {specfile}")
         return ()
 
     t1 = time.time()
@@ -185,7 +127,7 @@ def dlasearch_mock(specfile, catalog, model, nproc):
     return fitresults
 
 
-def process_spectra_group(coaddpath, catalog, model: DLAHolder, pool=None):
+def process_spectra_group(coaddpath, catalog, model: DLAHolder, executor=None):
     """
     pre-process group of spectra in same file and run DLA searching tools
 
@@ -194,7 +136,7 @@ def process_spectra_group(coaddpath, catalog, model: DLAHolder, pool=None):
     coaddpath (str) : path to file containing spectra
     catalog (table) : collection of spectra in file to search for DLAs
     model (dict) : flux model containing 'PCA_WAVE', 'PCA_COMP', and 'IGM' keys
-    pool : shared mp pool
+    executor : shared mp pool
 
     Returns
     -------
@@ -340,7 +282,7 @@ def process_spectra_group(coaddpath, catalog, model: DLAHolder, pool=None):
         # resample model to observed wave grid
         model.process_qso(
             entry, tid, wavelengths=wave, flux=flux, noise_variance=noise_variance,
-            pixel_mask=pixel_mask, z_qso=zqso,
+            pixel_mask=pixel_mask, z_qso=zqso, executor=executor,
         )
 
         # fitmodel = np.zeros([model["PCA_COMP"].shape[0], np.sum(fitmask)])
