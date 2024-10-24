@@ -346,7 +346,11 @@ class DLAGP(NullGP):
         return log_likelihoods_dla
 
     def parallel_log_model_evidences(
-        self, max_dlas: int, max_workers: int = None, batch_size: int = 100
+        self,
+        max_dlas: int,
+        max_workers: int = 32,
+        batch_size: int = 313,
+        executor=None,
     ) -> np.ndarray:
         """
         Parallelized version of the log model evidences computation using process-based parallelization.
@@ -357,11 +361,14 @@ class DLAGP(NullGP):
 
         Args:
             max_dlas (int): The maximum number of DLAs to be considered in the model.
+            max_workers (int, optional): Maximum number of workers to use. Defaults to number of CPU cores * 2.
+            batch_size (int, optional): Number of samples per batch. Defaults to 100.
+            executor (ProcessPoolExecutor, optional): An existing executor to reuse; if not provided, a new one is created.
 
         Returns:
             np.ndarray: Array containing the computed log likelihoods for 1 to `max_dlas` DLAs.
         """
-        # Use the number of CPU cores * 2 as the default number of workers
+        # Set default number of workers if not provided
         if max_workers is None:
             max_workers = os.cpu_count() * 2
 
@@ -383,21 +390,20 @@ class DLAGP(NullGP):
             self.this_wavelengths, self.z_qso
         )
 
-        # Create batches of indices (each batch will process multiple samples)
-        # If batch_size=100, this means each task will process 100 samples
-        indices = list(
-            range(self.params.num_dla_samples)
-        )  # Create a list of all sample indices
+        # Create batches of indices
+        indices = list(range(self.params.num_dla_samples))
         batches = [
             indices[i : i + batch_size] for i in range(0, len(indices), batch_size)
-        ]  # Split indices into batches
+        ]
 
-        for num_dlas in range(max_dlas):  # Iterate from 0 to max_dlas - 1
-            # Use a ProcessPoolExecutor to parallelize the loop
-            with concurrent.futures.ProcessPoolExecutor(
-                max_workers=max_workers
-            ) as executor:
-                # Submit the tasks for each batch to the thread pool
+        # Use an external executor if provided, otherwise create a new one
+        executor_is_external = executor is not None
+        if not executor_is_external:
+            executor = concurrent.futures.ProcessPoolExecutor(max_workers=max_workers)
+
+        try:
+            for num_dlas in range(max_dlas):  # Iterate from 0 to max_dlas - 1
+                # Submit the tasks for each batch to the executor
                 futures = {
                     executor.submit(
                         process_batch,
@@ -408,66 +414,65 @@ class DLAGP(NullGP):
                         self.dla_samples,
                         self.params,
                         self.sample_log_likelihood_k_dlas,
-                        self.min_z_separation,  # Pass the argument here
+                        self.min_z_separation,
                     ): batch
                     for batch in batches
                 }
 
                 # Process the results as each batch completes
                 for future in as_completed(futures):
-                    batch_indices = futures[
-                        future
-                    ]  # Retrieve the indices of the batch from the future
-                    batch_results = (
-                        future.result()
-                    )  # Get the results (log likelihoods) for this batch
+                    batch_indices = futures[future]  # Retrieve the batch indices
+                    batch_results = future.result()  # Get the results for this batch
 
                     # Store the results in the corresponding places in sample_log_likelihoods
                     for i, result in zip(batch_indices, batch_results):
                         sample_log_likelihoods[i, num_dlas] = result
 
-            # Store results into sample_log_likelihoods
-            # for i, result in enumerate(results):
-            # sample_log_likelihoods[:, num_dlas] = np.array(results)
+                # Handle NaN values and resampling logic
+                if num_dlas > 0:
+                    ind = base_sample_inds[:num_dlas, :]
+                    all_z_dlas = np.concatenate(
+                        [sample_z_dlas[None, :], sample_z_dlas[ind]], axis=0
+                    )
+                    ind = np.any(
+                        np.diff(np.sort(all_z_dlas, axis=0), axis=0)
+                        < self.min_z_separation,
+                        axis=0,
+                    )
+                    sample_log_likelihoods[ind, num_dlas] = np.nan
 
-            # Handle NaN values and resampling logic
-            if num_dlas > 0:
-                ind = base_sample_inds[:num_dlas, :]
-                all_z_dlas = np.concatenate(
-                    [sample_z_dlas[None, :], sample_z_dlas[ind]], axis=0
+                # Compute the log likelihood for each number of DLAs
+                max_log_likelihood = np.nanmax(sample_log_likelihoods[:, num_dlas])
+                sample_probabilities = np.exp(
+                    sample_log_likelihoods[:, num_dlas] - max_log_likelihood
                 )
-                ind = np.any(
-                    np.diff(np.sort(all_z_dlas, axis=0), axis=0)
-                    < self.min_z_separation,
-                    axis=0,
+                log_likelihoods_dla[num_dlas] = (
+                    max_log_likelihood
+                    + np.log(np.nanmean(sample_probabilities))
+                    - np.log(self.params.num_dla_samples) * num_dlas
                 )
-                sample_log_likelihoods[ind, num_dlas] = np.nan
 
-            # Compute the log likelihood for each number of DLAs
-            max_log_likelihood = np.nanmax(sample_log_likelihoods[:, num_dlas])
-            sample_probabilities = np.exp(
-                sample_log_likelihoods[:, num_dlas] - max_log_likelihood
-            )
-            log_likelihoods_dla[num_dlas] = (
-                max_log_likelihood
-                + np.log(np.nanmean(sample_probabilities))
-                - np.log(self.params.num_dla_samples) * num_dlas
-            )
+                if (num_dlas + 1) == max_dlas or np.isnan(
+                    log_likelihoods_dla[num_dlas]
+                ):
+                    break
 
-            if (num_dlas + 1) == max_dlas or np.isnan(log_likelihoods_dla[num_dlas]):
-                break
+                # Resampling logic to update base sample indices
+                nanind = np.isnan(sample_probabilities)
+                W = sample_probabilities
+                W[nanind] = 0.0
 
-            # Resampling logic to update base sample indices
-            nanind = np.isnan(sample_probabilities)
-            W = sample_probabilities
-            W[nanind] = 0.0
+                base_sample_inds[num_dlas, :] = np.random.choice(
+                    np.arange(self.params.num_dla_samples).astype(np.int32),
+                    size=self.params.num_dla_samples,
+                    replace=True,
+                    p=W / W.sum(),
+                )
 
-            base_sample_inds[num_dlas, :] = np.random.choice(
-                np.arange(self.params.num_dla_samples).astype(np.int32),
-                size=self.params.num_dla_samples,
-                replace=True,
-                p=W / W.sum(),
-            )
+        finally:
+            # Shut down the executor if it was created locally
+            if not executor_is_external:
+                executor.shutdown()
 
         # Store results for future use
         self.sample_log_likelihoods = sample_log_likelihoods
