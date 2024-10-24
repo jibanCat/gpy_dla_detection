@@ -13,8 +13,6 @@ import multiprocessing as mp
 from functools import partial
 import time
 
-from scipy.optimize import curve_fit
-
 # desi packages - TO DO : remove or isolate desi dependencies
 import desispec.io
 from desispec.interpolation import resample_flux
@@ -30,6 +28,7 @@ import warnings
 from scipy.optimize import OptimizeWarning
 
 from run_bayes_select import DLAHolder
+from gpy_dla_detection.set_parameters import Parameters
 
 warnings.simplefilter("error", OptimizeWarning)
 
@@ -38,17 +37,56 @@ warnings.simplefilter("error", OptimizeWarning)
 ##########################
 
 
-def dlasearch_hpx(healpix, survey, program, datapath, hpxcat, model, executor):
+def dlasearch_hpx(healpix, survey, program, datapath, hpxcat, model_params, executor):
     """
     Find the best fitting DLA profile(s) for spectra in hpx catalog
+
+    Arguments
+    ---------
+    healpix (int): N64 healpix
+    survey (str): e.g., main, sv1, sv2, etc.
+    program (str): e.g., bright, dark, etc.
+    datapath (str): path to coadd files
+    hpxcat (table): collection of spectra to search for DLAs, all belonging to
+                    single healpix
+    model_params (dict): dictionary of parameters for the DLAHolder model
+    executor: Executor for parallel processing
+
+    Returns
+    -------
+    fitresults (table): attributes of detected DLAs
     """
     t0 = time.time()
 
+    # Read spectra from healpix
     coaddname = f"coadd-{survey}-{program}-{str(healpix)}.fits"
     coadd = os.path.join(datapath, str(healpix // 100), str(healpix), coaddname)
 
     if os.path.exists(coadd):
+        # Reconstruct the Parameters instance from the dictionary
+        params = Parameters(**model_params["params_dict"])
+
+        # Reconstruct the DLAHolder instance using the reconstructed Parameters
+        model = DLAHolder(
+            learned_file=model_params["learned_file"],
+            catalog_name=model_params["catalog_name"],
+            los_catalog=model_params["los_catalog"],
+            dla_catalog=model_params["dla_catalog"],
+            dla_samples_file=model_params["dla_samples_file"],
+            sub_dla_samples_file=model_params["sub_dla_samples_file"],
+            params=params,
+            min_z_separation=model_params["min_z_separation"],
+            prev_tau_0=model_params["prev_tau_0"],
+            prev_beta=model_params["prev_beta"],
+            max_dlas=model_params["max_dlas"],
+            plot_figures=model_params["plot_figures"],
+            max_workers=model_params["max_workers"],
+            batch_size=model_params["batch_size"],
+        )
+
+        # Process spectra group
         fitresults = process_spectra_group(coadd, hpxcat, model, executor)
+
     else:
         log.error(f"could not locate coadd file for healpix {healpix}")
         return ()
@@ -99,10 +137,20 @@ def dlasearch_tile(tileid, datapath, tilecat, model, nproc):
         f"Completed processing of {len(tilecat)} spectra from tile {tileid} in {total}s"
     )
 
-
-def dlasearch_mock(specfile, catalog, model, executor):
+def dlasearch_mock(specfile, catalog, model_params, executor):
     """
     Find the best fitting DLA profile(s) for spectra in the mock catalog.
+
+    Arguments
+    ---------
+    specfile (str): Path to the mock spectra file.
+    catalog (table): Catalog of spectra to search for DLAs.
+    model_params (dict): Dictionary containing parameters for the DLAHolder model.
+    executor: Executor for parallel processing.
+
+    Returns
+    -------
+    fitresults (table): Fit attributes for detected DLAs.
     """
     t0 = time.time()
 
@@ -113,6 +161,28 @@ def dlasearch_mock(specfile, catalog, model, executor):
         if len(catalog) < 1:
             return ()
 
+        # Reconstruct the Parameters instance from the dictionary
+        params = Parameters(**model_params["params_dict"])
+
+        # Reconstruct the DLAHolder instance using the reconstructed Parameters
+        model = DLAHolder(
+            learned_file=model_params["learned_file"],
+            catalog_name=model_params["catalog_name"],
+            los_catalog=model_params["los_catalog"],
+            dla_catalog=model_params["dla_catalog"],
+            dla_samples_file=model_params["dla_samples_file"],
+            sub_dla_samples_file=model_params["sub_dla_samples_file"],
+            params=params,
+            min_z_separation=model_params["min_z_separation"],
+            prev_tau_0=model_params["prev_tau_0"],
+            prev_beta=model_params["prev_beta"],
+            max_dlas=model_params["max_dlas"],
+            plot_figures=model_params["plot_figures"],
+            max_workers=model_params["max_workers"],
+            batch_size=model_params["batch_size"],
+        )
+
+        # Process spectra group
         fitresults = process_spectra_group(specfile, catalog, model, executor)
     else:
         log.error(f"could not locate coadd file for {specfile}")
@@ -125,7 +195,6 @@ def dlasearch_mock(specfile, catalog, model, executor):
     )
 
     return fitresults
-
 
 def process_spectra_group(coaddpath, catalog, model: DLAHolder, executor=None):
     """
