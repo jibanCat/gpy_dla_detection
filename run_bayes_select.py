@@ -18,6 +18,8 @@ from gpy_dla_detection.desi_spectrum_reader import DESISpectrumReader
 from gpy_dla_detection.process_helpers import initialize_results, save_results_to_hdf5
 from gpy_dla_detection.plottings.plot_model import plot_samples_vs_this_mu
 
+from gpy_dla_detection.compute_1sigma_errors import compute_1sigma_errors_fast
+
 
 def process_single_spectrum(
     idx: int,
@@ -128,16 +130,44 @@ def process_single_spectrum(
     results["log_likelihoods_dla"][idx, :] = bayes.log_likelihoods[-max_dlas:]
     results["log_posteriors_no_dla"][idx] = bayes.log_posteriors[0]
     results["log_posteriors_dla"][idx, :] = bayes.log_posteriors[-max_dlas:]
-    results["sample_log_likelihoods_dla"][idx, :, :] = dla_gp.sample_log_likelihoods
+    # results["sample_log_likelihoods_dla"][idx, :, :] = dla_gp.sample_log_likelihoods
     results["base_sample_inds"][idx, :, :] = dla_gp.base_sample_inds
+
+    # save the DLA samples
+    sample_z_dlas = dla_gp.dla_samples.sample_z_dlas(
+        dla_gp.this_wavelengths, dla_gp.z_qso
+    )
+    results["sample_z_dlas"][idx, :] = sample_z_dlas
+    results["log_nhi_samples"][idx, :] = dla_samples.log_nhi_samples
 
     # MAP results
     MAP_z_dla, MAP_log_nhi = dla_gp.maximum_a_posteriori()
-    results["MAP_z_dlas"][idx, :, :] = MAP_z_dla
-    results["MAP_log_nhis"][idx, :, :] = MAP_log_nhi
+
+    # Only get the MAP values for the maximum posterior model
+    model_posteriors = bayes.model_posteriors[:]
+    # [0] is the no DLA model; [1] is the sub-DLA model; [2:] are the DLA models
+    argmaxind = np.argmax(model_posteriors) - 1
+    MAP_z_dla = MAP_z_dla[argmaxind, :argmaxind]  # exclude the nans
+    MAP_log_nhi = MAP_log_nhi[argmaxind, :argmaxind]
+
+    # Compute 1-sigma errors: This is using Gaussian approximation
+    z_dla_errs, log_nhi_errs = compute_1sigma_errors_fast(
+        MAP_z_dla,
+        MAP_log_nhi,
+        sample_z_dlas,
+        dla_samples.log_nhi_samples,
+        dla_gp.sample_log_likelihoods[
+            :, 0
+        ],  # the p(zDLA, NHI | MDLA1, D) is a good approximation for the multi-DLA case
+    )
+    # Maximum a posteriori results, and the 1-sigma errors around the mode
+    results["MAP_z_dlas"][idx, :argmaxind] = MAP_z_dla
+    results["MAP_log_nhis"][idx, :argmaxind] = MAP_log_nhi
+    results["z_dla_errs"][idx, :argmaxind] = z_dla_errs
+    results["log_nhi_errs"][idx, :argmaxind] = log_nhi_errs
 
     # Save real-scale model posteriors
-    results["model_posteriors"][idx, :] = bayes.model_posteriors[:]
+    results["model_posteriors"][idx, :] = model_posteriors
     results["p_dlas"][idx] = bayes.p_dla
     results["p_no_dlas"][idx] = bayes.p_no_dla
 
@@ -241,9 +271,14 @@ class DLAHolder:
         )
         # self.bayes = BayesModelSelect([0, 1, max_dlas], 2)
 
+    def initialize_results(self, num_spectra: int):
+        """
+        Initialize the results dictionary
+        """
         self.results = initialize_results(
-            num_spectra, max_dlas, self.params.num_dla_samples
+            num_spectra, self.max_dlas, self.params.num_dla_samples
         )
+        self.num_spectra = num_spectra
 
     def process_qso(
         self, idx, target_id, wavelengths, flux, noise_variance, pixel_mask, z_qso

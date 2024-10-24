@@ -74,19 +74,25 @@ def initialize_results(num_spectra: int, max_dlas: int, num_dla_samples: int) ->
         "log_posteriors_dla": np.full(
             (num_spectra, max_dlas), np.nan
         ),  # Log posteriors for DLA models
-        "sample_log_likelihoods_dla": np.full(
-            (num_spectra, num_dla_samples, max_dlas), np.nan
-        ),  # Sampled log likelihoods for DLA models
+        # "sample_log_likelihoods_dla": np.full(
+        #     (num_spectra, num_dla_samples, max_dlas), np.nan
+        # ),  # Sampled log likelihoods for DLA models
         # Correct shape for base_sample_inds: (num_spectra, max_dlas - 1, num_dla_samples)
         "base_sample_inds": np.zeros(
             (num_spectra, max_dlas - 1, num_dla_samples), dtype=np.int32
         ),  # Indices for base samples
         "MAP_z_dlas": np.full(
-            (num_spectra, max_dlas, max_dlas), np.nan
+            (num_spectra, max_dlas), np.nan
         ),  # MAP redshift estimates for DLAs
         "MAP_log_nhis": np.full(
-            (num_spectra, max_dlas, max_dlas), np.nan
+            (num_spectra, max_dlas), np.nan
         ),  # MAP log N_HI estimates for DLAs
+        "z_dla_errs": np.full(
+            (num_spectra, max_dlas), np.nan
+        ),  # 1-sigma errors for DLA redshifts
+        "log_nhi_errs": np.full(
+            (num_spectra, max_dlas), np.nan
+        ),  # 1-sigma errors for log N_HI values
         "model_posteriors": np.full(
             (num_spectra, 1 + 1 + max_dlas), np.nan
         ),  # Model posterior probabilities
@@ -96,6 +102,12 @@ def initialize_results(num_spectra: int, max_dlas: int, num_dla_samples: int) ->
         "p_no_dlas": np.full(
             (num_spectra,), np.nan
         ),  # Posterior probability for no-DLA model
+        "sample_z_dlas": np.full(
+            (num_spectra, num_dla_samples), np.nan
+        ),  # Sampled redshifts for DLAs
+        "log_nhi_samples": np.full(
+            (num_spectra, num_dla_samples), np.nan
+        ),  # Sampled log N_HI values
     }
     return results
 
