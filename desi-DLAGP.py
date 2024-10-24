@@ -1,7 +1,9 @@
 #!/usr/bin/env python
 
 """
-Description of code
+desi-DLAGP.py
+
+Search for DLAs in DESI quasar spectra using Gaussian Processes.
 """
 
 from astropy.table import Table, vstack

@@ -1,3 +1,9 @@
+"""
+bayesian_model_selection.py
+
+Bayesian model selection for DLA detection.
+"""
+
 from typing import List, Union
 from itertools import chain
 import warnings

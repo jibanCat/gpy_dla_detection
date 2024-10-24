@@ -1,3 +1,9 @@
+"""
+run_bayes_select.py
+
+This script processes DESI spectra using Bayesian model selection for Damped Lyman-Alpha (DLA) detection.
+"""
+
 import os
 import time
 import numpy as np

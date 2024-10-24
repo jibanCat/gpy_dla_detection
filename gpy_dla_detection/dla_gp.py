@@ -1,4 +1,6 @@
 """
+dla_gp.py
+
 A GP class for having multiple DLAs intervening in a given slightline. 
 """
 

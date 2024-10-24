@@ -1,7 +1,9 @@
 #!/usr/bin/env python
 
 """
-Identify DLAs in data sample using template plus viogt fits
+dlasearch.py
+
+Search for DLAs in spectra from a given catalog.
 """
 
 import numpy as np
