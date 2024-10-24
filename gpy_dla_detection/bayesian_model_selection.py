@@ -35,6 +35,7 @@ class BayesModelSelect:
         z_qso: float,
         max_workers: int = None,
         batch_size: int = 100,
+        pool=None,
     ) -> np.ndarray:
         """
         Perform Bayesian model selection for a list of models.
@@ -43,6 +44,8 @@ class BayesModelSelect:
         :param z_qso: The redshift of the quasar.
         :param max_workers: Number of workers to use for parallel processing.
         :param batch_size: Batch size for parallel computation.
+        :param pool: Pool object for parallel processing.
+
         :return: Array of log posteriors for each model.
         """
         assert isinstance(model_list[0], NullGP)  # Null model
@@ -69,6 +72,7 @@ class BayesModelSelect:
         log_priors[0] = np.log(1 - np.exp(logsumexp(log_priors[1:])))
 
         # Calculate model evidences (log likelihoods)
+        # TODO: Here is the place if you want to stop the for loop when you are sure that no dla is present
         for i, num_dlas in enumerate(self.all_max_dlas):
             if num_dlas == 0:
                 # Null model evidence
@@ -77,7 +81,10 @@ class BayesModelSelect:
             else:
                 # Use parallel model evidence calculation for DLA models
                 log_likelihoods_dla = model_list[i].parallel_log_model_evidences(
-                    num_dlas, max_workers=max_workers, batch_size=batch_size
+                    num_dlas,
+                    max_workers=max_workers,
+                    batch_size=batch_size,
+                    executor=pool,
                 )
                 log_likelihoods.append(log_likelihoods_dla)
 
@@ -87,16 +94,16 @@ class BayesModelSelect:
 
         # Perform the tolerance check
         if (
-            not np.isfinite(log_likelihoods[-1])
-            or not np.isfinite(log_priors[-1])
-            or not np.isfinite(log_posteriors[-1])
+            not np.isfinite(log_likelihoods[2])
+            or not np.isfinite(log_priors[2])
+            or not np.isfinite(log_posteriors[2])
         ):
             warnings.warn(
                 f"Invalid values encountered in log likelihoods, priors, or posteriors."
             )
         else:
             difference = np.abs(
-                (log_likelihoods[-1] + log_priors[-1]) - log_posteriors[-1]
+                (log_likelihoods[2] + log_priors[2]) - log_posteriors[2]
             )
             if difference >= 1e-4:
                 warnings.warn(f"Posterior mismatch detected: difference = {difference}")
@@ -128,7 +135,8 @@ class BayesModelSelect:
         """
         Compute the model posteriors as normalized probabilities.
         """
-        sum_log_posteriors = logsumexp(self.log_posteriors)
+        indisnan = np.isnan(self.log_posteriors)
+        sum_log_posteriors = logsumexp(self.log_posteriors[~indisnan])
         return np.exp(self.log_posteriors - sum_log_posteriors)
 
     @property
@@ -136,7 +144,8 @@ class BayesModelSelect:
         """
         Compute the model evidences as normalized probabilities.
         """
-        sum_log_evidences = logsumexp(self.log_likelihoods)
+        indisnan = np.isnan(self.log_likelihoods)
+        sum_log_evidences = logsumexp(self.log_likelihoods[~indisnan])
         return np.exp(self.log_likelihoods - sum_log_evidences)
 
     @property
@@ -144,7 +153,8 @@ class BayesModelSelect:
         """
         Compute the model priors as normalized probabilities.
         """
-        sum_log_priors = logsumexp(self.log_priors)
+        indisnan = np.isnan(self.log_priors)
+        sum_log_priors = logsumexp(self.log_priors[~indisnan])
         return np.exp(self.log_priors - sum_log_priors)
 
     @property
@@ -153,7 +163,7 @@ class BayesModelSelect:
         Compute the posterior probability of having a DLA.
         """
         model_posteriors = self.model_posteriors
-        self._p_dla = np.sum(model_posteriors[self.dla_model_posterior_ind])
+        self._p_dla = np.nansum(model_posteriors[self.dla_model_posterior_ind])
         return self._p_dla
 
     @property
