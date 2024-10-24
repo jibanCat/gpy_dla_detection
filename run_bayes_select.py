@@ -261,8 +261,6 @@ class DLAHolder:
         self.batch_size = batch_size
         self.params = params  # Pass in the Parameters object here
 
-        self.num_spectra = num_spectra
-
         # Initialize prior catalog and Bayesian model selection
         self.prior = PriorCatalog(self.params, catalog_name, los_catalog, dla_catalog)
         self.dla_samples = DLASamplesMAT(self.params, self.prior, dla_samples_file)
