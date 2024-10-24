@@ -98,28 +98,18 @@ def process_single_spectrum(
     batch_size : int
         Batch size for parallel model evidence computation.
     """
-
-    # Set data for the Null model (no DLAs)
-    gp.set_data(
-        rest_wavelengths, flux, noise_variance, pixel_mask, z_qso, build_model=True
-    )
-
-    # Set data for the DLA model (up to max DLAs)
-    dla_gp.set_data(
-        rest_wavelengths, flux, noise_variance, pixel_mask, z_qso, build_model=True
-    )
-
-    # Set data for the Sub-DLA model
-    subdla_gp.set_data(
-        rest_wavelengths, flux, noise_variance, pixel_mask, z_qso, build_model=True
-    )
+    # Set data for the Null, DLA, and Sub-DLA models
+    for model, name in zip([gp, dla_gp, subdla_gp], ["Null", "DLA", "Sub-DLA"]):
+        model.set_data(
+            rest_wavelengths, flux, noise_variance, pixel_mask, z_qso, build_model=True
+        )
 
     # Run Bayesian model selection with parallelized model evidence computation
     bayes.model_selection(
         [gp, subdla_gp, dla_gp], z_qso, max_workers=max_workers, batch_size=batch_size
     )
 
-    # Store results
+    # Store basic results
     results["z_qsos"][idx] = z_qso
     results["target_ids"][idx] = target_id
     results["min_z_dlas"][idx] = dla_gp.params.min_z_dla(wavelengths, z_qso)
@@ -130,48 +120,51 @@ def process_single_spectrum(
     results["log_likelihoods_dla"][idx, :] = bayes.log_likelihoods[-max_dlas:]
     results["log_posteriors_no_dla"][idx] = bayes.log_posteriors[0]
     results["log_posteriors_dla"][idx, :] = bayes.log_posteriors[-max_dlas:]
-    # results["sample_log_likelihoods_dla"][idx, :, :] = dla_gp.sample_log_likelihoods
-    results["base_sample_inds"][idx, :, :] = dla_gp.base_sample_inds
 
-    # save the DLA samples
+    # # Store base sample indices (ensure this is set correctly in dla_gp)
+    # results["base_sample_inds"][idx, :, :] = dla_gp.base_sample_inds
+
+    # Save the DLA samples
     sample_z_dlas = dla_gp.dla_samples.sample_z_dlas(
         dla_gp.this_wavelengths, dla_gp.z_qso
     )
-    results["sample_z_dlas"][idx, :] = sample_z_dlas
-    results["log_nhi_samples"][idx, :] = dla_samples.log_nhi_samples
+    # results["sample_z_dlas"][idx, :] = sample_z_dlas
+    # results["log_nhi_samples"][idx, :] = dla_samples.log_nhi_samples
 
-    # MAP results
+    # Obtain MAP estimates for z_DLA and log_NHI
     MAP_z_dla, MAP_log_nhi = dla_gp.maximum_a_posteriori()
 
-    # Only get the MAP values for the maximum posterior model
+    # Identify the most probable model
     model_posteriors = bayes.model_posteriors[:]
-    # [0] is the no DLA model; [1] is the sub-DLA model; [2:] are the DLA models
     argmaxind = np.argmax(model_posteriors) - 1
-    MAP_z_dla = MAP_z_dla[argmaxind, :argmaxind]  # exclude the nans
-    MAP_log_nhi = MAP_log_nhi[argmaxind, :argmaxind]
 
-    # Compute 1-sigma errors: This is using Gaussian approximation
-    z_dla_errs, log_nhi_errs = compute_1sigma_errors_fast(
-        MAP_z_dla,
-        MAP_log_nhi,
-        sample_z_dlas,
-        dla_samples.log_nhi_samples,
-        dla_gp.sample_log_likelihoods[
-            :, 0
-        ],  # the p(zDLA, NHI | MDLA1, D) is a good approximation for the multi-DLA case
-    )
-    # Maximum a posteriori results, and the 1-sigma errors around the mode
-    results["MAP_z_dlas"][idx, :argmaxind] = MAP_z_dla
-    results["MAP_log_nhis"][idx, :argmaxind] = MAP_log_nhi
-    results["z_dla_errs"][idx, :argmaxind] = z_dla_errs
-    results["log_nhi_errs"][idx, :argmaxind] = log_nhi_errs
+    # Check if any DLA detection is made
+    if argmaxind >= 0:
+        # Filter out NaNs in the MAP values
+        MAP_z_dla = MAP_z_dla[:argmaxind]
+        MAP_log_nhi = MAP_log_nhi[:argmaxind]
 
-    # Save real-scale model posteriors
+        # Compute 1-sigma errors using the fast method (Gaussian approximation)
+        z_dla_errs, log_nhi_errs = compute_1sigma_errors_fast(
+            MAP_z_dla,
+            MAP_log_nhi,
+            sample_z_dlas,
+            dla_samples.log_nhi_samples,
+            dla_gp.sample_log_likelihoods[:, 0],
+        )
+
+        # Save MAP estimates and associated 1-sigma errors
+        results["MAP_z_dlas"][idx, :argmaxind] = MAP_z_dla
+        results["MAP_log_nhis"][idx, :argmaxind] = MAP_log_nhi
+        results["z_dla_errs"][idx, :argmaxind] = z_dla_errs
+        results["log_nhi_errs"][idx, :argmaxind] = log_nhi_errs
+
+    # Save posterior probabilities
     results["model_posteriors"][idx, :] = model_posteriors
     results["p_dlas"][idx] = bayes.p_dla
     results["p_no_dlas"][idx] = bayes.p_no_dla
 
-    # Optionally generate plots
+    # Generate plots if enabled
     if plot_figures:
         title = f"Spectrum {target_id}; zQSO: {z_qso:.2f}"
         out_filename = f"spec-{str(idx).zfill(6)}"
