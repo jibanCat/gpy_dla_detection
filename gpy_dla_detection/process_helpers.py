@@ -7,7 +7,7 @@ import h5py
 from typing import List
 
 
-def initialize_results(num_spectra: int, max_dlas: int, num_dla_samples: int) -> dict:
+def initialize_results(num_spectra: int, max_dlas: int) -> dict:
     """
     Initialize the results dictionary to store outputs for all spectra.
 
@@ -21,8 +21,6 @@ def initialize_results(num_spectra: int, max_dlas: int, num_dla_samples: int) ->
         The number of spectra being processed.
     max_dlas : int
         The maximum number of DLAs to model.
-    num_dla_samples : int
-        The number of DLA samples to process.
 
     Returns:
     --------
@@ -78,9 +76,9 @@ def initialize_results(num_spectra: int, max_dlas: int, num_dla_samples: int) ->
         #     (num_spectra, num_dla_samples, max_dlas), np.nan
         # ),  # Sampled log likelihoods for DLA models
         # Correct shape for base_sample_inds: (num_spectra, max_dlas - 1, num_dla_samples)
-        "base_sample_inds": np.zeros(
-            (num_spectra, max_dlas - 1, num_dla_samples), dtype=np.int32
-        ),  # Indices for base samples
+        # "base_sample_inds": np.zeros(
+        #     (num_spectra, max_dlas - 1, num_dla_samples), dtype=np.int32
+        # ),  # Indices for base samples
         "MAP_z_dlas": np.full(
             (num_spectra, max_dlas), np.nan
         ),  # MAP redshift estimates for DLAs
@@ -102,12 +100,12 @@ def initialize_results(num_spectra: int, max_dlas: int, num_dla_samples: int) ->
         "p_no_dlas": np.full(
             (num_spectra,), np.nan
         ),  # Posterior probability for no-DLA model
-        "sample_z_dlas": np.full(
-            (num_spectra, num_dla_samples), np.nan
-        ),  # Sampled redshifts for DLAs
-        "log_nhi_samples": np.full(
-            (num_spectra, num_dla_samples), np.nan
-        ),  # Sampled log N_HI values
+        # "sample_z_dlas": np.full(
+        #     (num_spectra, num_dla_samples), np.nan
+        # ),  # Sampled redshifts for DLAs
+        # "log_nhi_samples": np.full(
+        #     (num_spectra, num_dla_samples), np.nan
+        # ),  # Sampled log N_HI values
     }
     return results
 
