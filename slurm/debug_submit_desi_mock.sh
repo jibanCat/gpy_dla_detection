@@ -56,7 +56,7 @@ LEVEL2_START="${LEVEL2_START:-0}"
 LEVEL2_END="${LEVEL2_END:-1}"                 # Reduced range for quick debug
 
 # Run the Python script with srun
-srun -N 1 -n 32 python desi-DLAGP.py \
+srun --export=ALL -N 1 -n 32 python desi-DLAGP.py \
     --qsocat "$QSOCAT" \
     --release "$RELEASE" \
     --program "$PROGRAM" \
