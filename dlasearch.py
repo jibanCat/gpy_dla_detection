@@ -354,42 +354,11 @@ def process_spectra_group(coaddpath, catalog, model: DLAHolder, executor=None):
             pixel_mask=pixel_mask, z_qso=zqso, executor=executor,
         )
 
-        # fitmodel = np.zeros([model["PCA_COMP"].shape[0], np.sum(fitmask)])
-        # for i in range(model["PCA_COMP"].shape[0]):
-        #     fitmodel[i] = resample_flux(
-        #         wave[fitmask], model["PCA_WAVE"] * (1 + zqso), model["PCA_COMP"][i]
-        #     )
-
-        # TODO: update GPDLA's meanflux model to DESI's, which needs to re-train on Y1
-        # # apply mean transmission correction for lyman alpha forest
-        # for transition, values in constants.Lyman_series[model["IGM"]].items():
-        #     lam_range = wave_rf[fitmask] < values["line"]
-        #     zpix = wave[fitmask][lam_range] / values["line"] - 1
-        #     T = np.exp(-values["A"] * (1 + zpix) ** values["B"])
-        #     fitmodel[:, lam_range] *= T
-
-        # # determine var_lss array
-        # lyaregion = (wave_rf < constants.Lya_line) & (wave_rf > constants.Lyb_line)
-        # lybregion = (
-        #     wave_rf < constants.Lyb_line
-        # )  # assuming N>3 transition minimal impact
-        # varlss = np.zeros(len(ivar))
-        # varlss[lyaregion] = varlss_lya[lyaregion]
-        # varlss[lybregion] = varlss_lyb[lybregion]
-
-        # TODO: get zerr and nhierr from GPDLA
+        # Get zerr and nhierr from GPDLA
+        # TODO: check the robustness of zerr and nhierr
         # model w/o DLAs
-
         log_posteriors_no_dla = model.results["log_posteriors_no_dla"][entry]
         p_no_dla = model.results["p_no_dlas"][entry]
-        # coeff_null, chi2dof_null = fit_spectrum(
-        #     wave[fitmask],
-        #     flux[fitmask],
-        #     ivar[fitmask],
-        #     fitmodel,
-        #     varlss[fitmask],
-        #     searchmask,
-        # )
 
         zdla = model.results["MAP_z_dlas"][entry]
         zerr = model.results["z_dla_errs"][entry]
@@ -451,6 +420,10 @@ def process_spectra_group(coaddpath, catalog, model: DLAHolder, executor=None):
         # avoid vstack error for empty tables
         return ()
 
+    # TODO: Intermediate results saving for debugging - this is the same format as Roman's code
+    # model.save_results(output_file=None)
+
+    # DLACAT create table of fit results
     fitresults = Table(
         data=(
             tidlist,

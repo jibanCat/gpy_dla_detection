@@ -347,7 +347,6 @@ def main(args=None):
         ind = (all_level2 >= args.level2_start) & (all_level2 < args.level2_end)
 
         catalog = read_mock_catalog(args.qsocat, args.balmask, args.mockdir)
-        # num_spectra  # TODO: count from the number of level2 folders
     else:
         # running in between healpix pixels: hpx_start - hpx_end
         catalog = read_catalog(args.qsocat, args.balmask, args.tilebased)
@@ -360,40 +359,6 @@ def main(args=None):
         )
         ind = (all_hpxs >= args.hpx_start) & (all_hpxs < args.hpx_end)
 
-        # num_spectra = np.sum(ind)  # count from the number of healpix pixels
-
-    # # Set up the GP-DLA model
-    # It is more efficient to set up the model in the next parallel pool
-    # 
-    # # Initialize Parameters object with user inputs
-    # params = Parameters(
-    #     loading_min_lambda=args.loading_min_lambda,
-    #     loading_max_lambda=args.loading_max_lambda,
-    #     normalization_min_lambda=args.normalization_min_lambda,
-    #     normalization_max_lambda=args.normalization_max_lambda,
-    #     min_lambda=args.min_lambda,
-    #     max_lambda=args.max_lambda,
-    #     dlambda=args.dlambda,
-    #     k=args.k,
-    #     max_noise_variance=args.max_noise_variance,
-    # )
-    # # This is the GP-DLA processor which can be reused for multiple spectra
-    # model = DLAHolder(
-    #     learned_file=args.learned_file,
-    #     catalog_name=args.catalog_name,
-    #     los_catalog=args.los_catalog,
-    #     dla_catalog=args.dla_catalog,
-    #     dla_samples_file=args.dla_samples_file,
-    #     sub_dla_samples_file=args.sub_dla_samples_file,
-    #     params=params,
-    #     min_z_separation=args.min_z_separation,
-    #     prev_tau_0=args.prev_tau_0,
-    #     prev_beta=args.prev_beta,
-    #     max_dlas=args.max_dlas,
-    #     plot_figures=bool(args.plot_figures),
-    #     max_workers=args.max_workers,
-    #     batch_size=args.batch_size,
-    # )
     # Convert Parameters to a dictionary
     params_dict = {
         "loading_min_lambda": args.loading_min_lambda,
@@ -423,7 +388,7 @@ def main(args=None):
         "plot_figures": bool(args.plot_figures),
         "max_workers": args.max_workers,
         "batch_size": args.batch_size,
-    }    
+    }
 
     # set up for nested multiprocessing
     nproc_futures = int(os.cpu_count() / args.nproc)
