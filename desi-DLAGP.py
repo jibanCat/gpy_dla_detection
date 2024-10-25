@@ -385,7 +385,7 @@ def main(args=None):
         "batch_size": args.batch_size,
     }
 
-    # set up for nested multiprocessing
+    # Set up for nested multiprocessing
     nproc_futures = int(os.cpu_count() / args.nproc)
     # Create a high-level executor
     with ProcessPoolExecutor(max_workers=nproc_futures) as high_level_executor:
@@ -394,7 +394,6 @@ def main(args=None):
             datapath = f"/global/cfs/cdirs/desi/spectro/redux/{args.release}/healpix/{args.survey}/{args.program}"
             this_hpxs = all_hpxs[ind]
 
-            # Distribute tasks using the high-level executor
             if nproc_futures == 1:
                 results = [
                     dlasearch.dlasearch_hpx(
@@ -404,7 +403,7 @@ def main(args=None):
                         datapath,
                         catalog[catalog["HPXPIXEL"] == hpx],
                         model_params,  # Pass the model parameters dictionary here
-                        high_level_executor,
+                        args.nproc,  # Pass the number of processors
                     )
                     for hpx in np.unique(this_hpxs)
                 ]
@@ -417,24 +416,19 @@ def main(args=None):
                         "program": args.program,
                         "datapath": datapath,
                         "hpxcat": catalog[catalog["HPXPIXEL"] == hpx],
-                        "model_params": model_params,  # Pass the complete model parameters dictionary
-                        "executor": high_level_executor,
+                        "model_params": model_params,
+                        "nproc": args.nproc,  # Pass the number of processors
                     }
                     for hpx in np.unique(this_hpxs)
                 ]
 
                 results = list(high_level_executor.map(_dlasearchhpx, arguments))
 
-        # Place holder until tile-based is developed
-        elif args.tilebased:
-            log.error("Tile-based capability does not exist")
-            exit(1)
-
         elif args.mocks:
             if nproc_futures == 1:
                 results = [
                     dlasearch.dlasearch_mock(
-                        specfile, catalog, model_params, high_level_executor
+                        specfile, catalog, model_params, nproc_futures
                     )
                     for specfile in speclist
                 ]
@@ -443,8 +437,8 @@ def main(args=None):
                     {
                         "specfile": specfile,
                         "catalog": catalog,
-                        "model_params": model_params,  # Pass the complete model parameters dictionary
-                        "executor": high_level_executor,
+                        "model_params": model_params,
+                        "nproc": nproc_futures,
                     }
                     for specfile in speclist
                 ]

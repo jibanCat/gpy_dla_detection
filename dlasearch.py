@@ -12,6 +12,8 @@ import fitsio
 from astropy.table import Table, vstack
 
 import multiprocessing as mp
+from concurrent.futures import ProcessPoolExecutor
+
 from functools import partial
 import time
 
@@ -39,9 +41,9 @@ warnings.simplefilter("error", OptimizeWarning)
 ##########################
 
 
-def dlasearch_hpx(healpix, survey, program, datapath, hpxcat, model_params, executor):
+def dlasearch_hpx(healpix, survey, program, datapath, hpxcat, model_params, nproc):
     """
-    Find the best fitting DLA profile(s) for spectra in hpx catalog
+    Find the best fitting DLA profile(s) for spectra in hpx catalog.
 
     Arguments
     ---------
@@ -49,10 +51,9 @@ def dlasearch_hpx(healpix, survey, program, datapath, hpxcat, model_params, exec
     survey (str): e.g., main, sv1, sv2, etc.
     program (str): e.g., bright, dark, etc.
     datapath (str): path to coadd files
-    hpxcat (table): collection of spectra to search for DLAs, all belonging to
-                    single healpix
+    hpxcat (table): collection of spectra to search for DLAs, all belonging to a single healpix
     model_params (dict): dictionary of parameters for the DLAHolder model
-    executor: Executor for parallel processing
+    nproc (int): number of processors to use for nested parallelism
 
     Returns
     -------
@@ -86,8 +87,9 @@ def dlasearch_hpx(healpix, survey, program, datapath, hpxcat, model_params, exec
             batch_size=model_params["batch_size"],
         )
 
-        # Process spectra group
-        fitresults = process_spectra_group(coadd, hpxcat, model, executor)
+        # Create a nested executor
+        with ProcessPoolExecutor(max_workers=nproc) as nested_executor:
+            fitresults = process_spectra_group(coadd, hpxcat, model, nested_executor)
 
     else:
         log.error(f"could not locate coadd file for healpix {healpix}")
@@ -141,7 +143,7 @@ def dlasearch_tile(tileid, datapath, tilecat, model, nproc):
     )
 
 
-def dlasearch_mock(specfile, catalog, model_params, executor):
+def dlasearch_mock(specfile, catalog, model_params, nproc):
     """
     Find the best fitting DLA profile(s) for spectra in the mock catalog.
 
@@ -150,7 +152,7 @@ def dlasearch_mock(specfile, catalog, model_params, executor):
     specfile (str): Path to the mock spectra file.
     catalog (table): Catalog of spectra to search for DLAs.
     model_params (dict): Dictionary containing parameters for the DLAHolder model.
-    executor: Executor for parallel processing.
+    nproc (int): Number of processors for parallel processing.
 
     Returns
     -------
@@ -186,8 +188,11 @@ def dlasearch_mock(specfile, catalog, model_params, executor):
             batch_size=model_params["batch_size"],
         )
 
-        # Process spectra group
-        fitresults = process_spectra_group(specfile, catalog, model, executor)
+        # Create a nested executor
+        with ProcessPoolExecutor(max_workers=nproc) as nested_executor:
+            fitresults = process_spectra_group(
+                specfile, catalog, model, nested_executor
+            )
     else:
         log.error(f"could not locate coadd file for {specfile}")
         return ()
