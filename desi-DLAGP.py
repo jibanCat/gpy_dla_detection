@@ -340,6 +340,7 @@ def main(args=None):
             )
         )
         ind = (all_level2 >= args.level2_start) & (all_level2 < args.level2_end)
+        speclist = speclist[ind]
 
         catalog = read_mock_catalog(args.qsocat, args.balmask, args.mockdir)
     else:
