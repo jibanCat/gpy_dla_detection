@@ -26,6 +26,8 @@ from gpy_dla_detection.plottings.plot_model import plot_samples_vs_this_mu
 
 from gpy_dla_detection.compute_1sigma_errors import compute_1sigma_errors_fast
 
+from desiutil.log import log
+
 
 def process_single_spectrum(
     idx: int,
@@ -177,6 +179,18 @@ def process_single_spectrum(
     results["p_dlas"][idx] = bayes.p_dla
     results["p_no_dlas"][idx] = bayes.p_no_dla
 
+    # Log the results
+    log.info(
+        f"Results for spectrum {idx + 1}/{len(results['z_qsos'])} (ID: {target_id})"
+    )
+    log.info(f" ...     MAP z_DLA: {MAP_z_dla}")
+    log.info(f" ...     z_DLA errors: {z_dla_errs}")
+    log.info(f" ...     MAP log N_HI: {MAP_log_nhi}")
+    log.info(f" ...     log N_HI errors: {log_nhi_errs}")
+    # log.info(f" ...     Model posteriors: {model_posteriors}")
+    log.info(f" ...     p(DLA): {bayes.p_dla:.3f}")
+    log.info(f" ...     p(no DLAs): {bayes.p_no_dla:.3f}")
+
     # Generate plots if enabled
     if plot_figures:
         title = f"Spectrum {target_id}; zQSO: {z_qso:.2f}"
@@ -230,7 +244,6 @@ class DLAHolder:
 
     def __init__(
         self,
-        num_spectra: int,
         learned_file: str,
         catalog_name: str,
         los_catalog: str,
@@ -334,6 +347,11 @@ class DLAHolder:
             prev_beta=self.prev_beta,
         )
         bayes = BayesModelSelect([0, 1, self.max_dlas], 2)
+
+        # Log the processing of the spectrum
+        log.info(
+            f"Processing spectrum {idx + 1}/{len(self.num_spectra)} (ID: {target_id})"
+        )
         # Process single spectrum
         process_single_spectrum(
             idx,

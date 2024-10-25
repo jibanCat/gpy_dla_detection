@@ -214,7 +214,7 @@ def process_spectra_group(coaddpath, catalog, model: DLAHolder, executor=None):
     ---------
     coaddpath (str) : path to file containing spectra
     catalog (table) : collection of spectra in file to search for DLAs
-    model (dict) : flux model containing 'PCA_WAVE', 'PCA_COMP', and 'IGM' keys
+    model (DLAHolder) : DLA model object
     executor : shared mp pool
 
     Returns

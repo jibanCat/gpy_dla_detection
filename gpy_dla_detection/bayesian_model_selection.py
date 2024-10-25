@@ -14,6 +14,8 @@ from .dla_gp import DLAGP
 from .subdla_gp import SubDLAGP
 import concurrent.futures
 
+from desiutil.log import log
+
 
 class BayesModelSelect:
     """
@@ -75,11 +77,23 @@ class BayesModelSelect:
         log_priors = np.array(list(chain(*log_priors)))
         log_priors[0] = np.log(1 - np.exp(logsumexp(log_priors[1:])))
 
+        # Log prior check
+        log.info(f" ...     p( no DLA | z_QSO)     : {np.exp(log_priors[0]):.3f}")
+        log.info(f" ...     p( subDLA | z_QSO)     : {np.exp(log_priors[1]):.3f}")
+        log.info(
+            f" ...     p(   DLA | z_QSO)        : {np.sum(np.exp(log_priors[2:])):.3f}"
+        )
+
         # Calculate model evidences (log likelihoods)
         for i, num_dlas in enumerate(self.all_max_dlas):
             if num_dlas == 0:
                 log_likelihood_no_dla = model_list[i].log_model_evidence()
                 log_likelihoods.append([log_likelihood_no_dla])
+
+                # Log likelihood check
+                log.info(
+                    f" ...     log p(D | z_QSO, no DLA)     : {log_likelihood_no_dla:.3f}"
+                )
             else:
                 log_likelihoods_dla = model_list[i].parallel_log_model_evidences(
                     num_dlas,
@@ -88,6 +102,10 @@ class BayesModelSelect:
                     executor=executor,
                 )
                 log_likelihoods.append(log_likelihoods_dla)
+                # Log likelihood check
+                log.info(
+                    f" ...     log p(D | z_QSO, {num_dlas} DLAs) : {log_likelihoods_dla:.3f}"
+                )
 
         # Flatten the log likelihoods and compute the posteriors
         log_likelihoods = np.array(list(chain(*log_likelihoods)))
